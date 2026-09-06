@@ -1,7 +1,6 @@
 package oathnet
 
 import (
-	"encoding/json"
 	"fmt"
 	"net/url"
 	"time"
@@ -19,8 +18,11 @@ type FileSearchCreateOptions struct {
 	IncludeMatches bool
 	CaseSensitive  bool
 	ContextLines   int
-	FilePattern    string
-	MaxMatches     int
+	// ContextLinesValue overrides ContextLines, including an explicit zero.
+	// Leave nil to keep the default of two surrounding lines.
+	ContextLinesValue *int
+	FilePattern       string
+	MaxMatches        int
 }
 
 // Create creates a file search job.
@@ -46,6 +48,9 @@ func (s *FileSearchService) Create(expression string, opts *FileSearchCreateOpti
 		if opts.ContextLines > 0 {
 			body["context_lines"] = opts.ContextLines
 		}
+		if opts.ContextLinesValue != nil {
+			body["context_lines"] = *opts.ContextLinesValue
+		}
 		if opts.FilePattern != "" {
 			body["file_pattern"] = opts.FilePattern
 		}
@@ -61,17 +66,11 @@ func (s *FileSearchService) Create(expression string, opts *FileSearchCreateOpti
 	}
 
 	// Handle wrapped or unwrapped response
-	resp := &FileSearchJobResponse{Success: true}
-	if _, ok := rawResp["success"]; ok {
-		jsonData, _ := json.Marshal(rawResp)
-		json.Unmarshal(jsonData, resp)
-	} else {
-		jsonData, _ := json.Marshal(rawResp)
-		resp.Data = &FileSearchJobData{}
-		json.Unmarshal(jsonData, resp.Data)
+	success, message, data, err := decodeJobPayload[FileSearchJobData](rawResp)
+	if err != nil {
+		return nil, err
 	}
-
-	return resp, nil
+	return &FileSearchJobResponse{Success: success, Message: message, Data: data}, nil
 }
 
 // CreateFileSearchV2 is an operation-id alias for Create.
@@ -87,17 +86,11 @@ func (s *FileSearchService) GetStatus(jobID string) (*FileSearchJobResponse, err
 		return nil, err
 	}
 
-	resp := &FileSearchJobResponse{Success: true}
-	if _, ok := rawResp["success"]; ok {
-		jsonData, _ := json.Marshal(rawResp)
-		json.Unmarshal(jsonData, resp)
-	} else {
-		jsonData, _ := json.Marshal(rawResp)
-		resp.Data = &FileSearchJobData{}
-		json.Unmarshal(jsonData, resp.Data)
+	success, message, data, err := decodeJobPayload[FileSearchJobData](rawResp)
+	if err != nil {
+		return nil, err
 	}
-
-	return resp, nil
+	return &FileSearchJobResponse{Success: success, Message: message, Data: data}, nil
 }
 
 // GetFileSearchV2 is an operation-id alias for GetStatus.
@@ -107,36 +100,16 @@ func (s *FileSearchService) GetFileSearchV2(jobID string) (*FileSearchJobRespons
 
 // WaitForCompletion waits for a file search job to complete.
 func (s *FileSearchService) WaitForCompletion(jobID string, pollInterval, timeout time.Duration) (*FileSearchJobResponse, error) {
-	startTime := time.Now()
-
-	for {
-		resp, err := s.GetStatus(jobID)
+	return pollJob(s.client, jobID, pollInterval, timeout, func(client *Client) (*FileSearchJobResponse, bool, string, string, int, error) {
+		resp, err := client.FileSearch.GetStatus(jobID)
 		if err != nil {
-			return nil, err
+			return nil, false, "", "", 0, err
 		}
-
-		if resp.Data != nil {
-			status := resp.Data.Status
-			if status == "completed" || status == "canceled" {
-				return resp, nil
-			}
+		if resp.Data == nil {
+			return resp, false, "", resp.Message, 0, nil
 		}
-
-		elapsed := time.Since(startTime)
-		if elapsed >= timeout {
-			return nil, fmt.Errorf("file search job %s did not complete within %v", jobID, timeout)
-		}
-
-		// Use server-suggested poll interval if available
-		sleepTime := pollInterval
-		if resp.Data != nil && resp.Data.NextPollAfterMs > 0 {
-			suggested := time.Duration(resp.Data.NextPollAfterMs) * time.Millisecond
-			if suggested < sleepTime {
-				sleepTime = suggested
-			}
-		}
-		time.Sleep(sleepTime)
-	}
+		return resp, resp.Success, resp.Data.Status, resp.Message, resp.Data.NextPollAfterMs, nil
+	})
 }
 
 // Search creates a file search and waits for results.

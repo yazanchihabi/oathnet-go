@@ -1,12 +1,18 @@
 package oathnet
 
 import (
+	"net"
+	"net/url"
 	"os"
 	"testing"
 )
 
 // getAPIKey returns the API key from environment variable.
 func getAPIKey(t *testing.T) string {
+	t.Helper()
+	if os.Getenv("OATHNET_LIVE_TESTS") != "1" {
+		t.Skip("live tests require OATHNET_LIVE_TESTS=1 and an isolated local API")
+	}
 	apiKey := os.Getenv("OATHNET_API_KEY")
 	if apiKey == "" {
 		t.Skip("OATHNET_API_KEY environment variable required for integration tests")
@@ -16,8 +22,18 @@ func getAPIKey(t *testing.T) string {
 
 // createTestClient creates a client for testing.
 func createTestClient(t *testing.T) *Client {
+	t.Helper()
 	apiKey := getAPIKey(t)
-	client, err := NewClient(apiKey)
+	baseURL := os.Getenv("OATHNET_BASE_URL")
+	parsed, err := url.Parse(baseURL)
+	if err != nil || parsed == nil || parsed.Scheme != "http" || parsed.Port() == "" || parsed.User != nil {
+		t.Fatal("live tests require an explicit http://127.0.0.1:PORT/api isolated target")
+	}
+	ip := net.ParseIP(parsed.Hostname())
+	if ip == nil || !ip.IsLoopback() {
+		t.Fatal("live tests require a loopback API target")
+	}
+	client, err := NewClient(apiKey, WithBaseURL(baseURL))
 	if err != nil {
 		t.Fatalf("Failed to create client: %v", err)
 	}

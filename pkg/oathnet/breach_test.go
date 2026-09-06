@@ -158,7 +158,7 @@ func TestBreachV2Service_SearchRequestConstruction(t *testing.T) {
 		Fields:         []string{"email", "dbname"},
 		SearchID:       "search 123",
 		ExtraQuery: map[string][]string{
-			"steam[]": {"steam/with space"},
+			"steam": {"steam/with space"},
 		},
 	})
 	if err != nil {
@@ -204,46 +204,46 @@ func TestBreachV2Service_SearchRequestConstruction(t *testing.T) {
 		"date_field":      {"indexed_at"},
 		"wildcard":        {"true"},
 		"logic":           {"and"},
-		"email[]":         {"alice+tag@example.com", "bob@example.com"},
-		"email_domain[]":  {"example.com"},
-		"domain[]":        {"app.example.com"},
-		"username[]":      {"alice"},
-		"password[]":      {"secret"},
-		"password_hash[]": {"hash"},
-		"ip[]":            {"192.0.2.10"},
-		"phone[]":         {"+1 555 123 4567"},
-		"first_name[]":    {"Alice"},
-		"last_name[]":     {"Example"},
-		"full_name[]":     {"Alice Example"},
-		"city[]":          {"Austin"},
-		"country[]":       {"US"},
-		"state[]":         {"TX"},
-		"postal_code[]":   {"78701"},
-		"dbname[]":        {"linkedin.com", "twitter.com"},
-		"discord_id[]":    {"1234567890"},
-		"iban[]":          {"DE89370400440532013000"},
-		"ssn[]":           {"123-45-6789"},
+		"email":           {"alice+tag@example.com", "bob@example.com"},
+		"email_domain":    {"example.com"},
+		"domain":          {"app.example.com"},
+		"username":        {"alice"},
+		"password":        {"secret"},
+		"password_hash":   {"hash"},
+		"ip":              {"192.0.2.10"},
+		"phone":           {"+1 555 123 4567"},
+		"first_name":      {"Alice"},
+		"last_name":       {"Example"},
+		"full_name":       {"Alice Example"},
+		"city":            {"Austin"},
+		"country":         {"US"},
+		"state":           {"TX"},
+		"postal_code":     {"78701"},
+		"dbname":          {"linkedin.com", "twitter.com"},
+		"discord_id":      {"1234567890"},
+		"iban":            {"DE89370400440532013000"},
+		"ssn":             {"123-45-6789"},
 		"date_birth_from": {"1980-01-01"},
 		"date_birth_to":   {"2000-12-31"},
-		"name[]":          {"Alice E"},
-		"gender[]":        {"f"},
-		"address[]":       {"1 Test St"},
-		"discord[]":       {"alice#0001"},
-		"social[]":        {"alice-social"},
-		"financial[]":     {"alice-financial"},
-		"gaming[]":        {"alice-game"},
-		"fields[]":        {"email", "dbname"},
+		"name":            {"Alice E"},
+		"gender":          {"f"},
+		"address":         {"1 Test St"},
+		"discord":         {"alice#0001"},
+		"social":          {"alice-social"},
+		"financial":       {"alice-financial"},
+		"gaming":          {"alice-game"},
+		"fields":          {"email", "dbname"},
 		"search_id":       {"search 123"},
-		"steam[]":         {"steam/with space"},
+		"steam":           {"steam/with space"},
 	}
 	if !reflect.DeepEqual(gotQuery, wantQuery) {
 		t.Fatalf("query = %#v, want %#v", gotQuery, wantQuery)
 	}
 	for _, encoded := range []string{
 		"cursor=cursor%2Fwith+space",
-		"email%5B%5D=alice%2Btag%40example.com",
-		"fields%5B%5D=email",
-		"steam%5B%5D=steam%2Fwith+space",
+		"email=alice%2Btag%40example.com",
+		"fields=email",
+		"steam=steam%2Fwith+space",
 	} {
 		if !strings.Contains(gotRawQuery, encoded) {
 			t.Fatalf("raw query %q does not contain %q", gotRawQuery, encoded)
@@ -342,7 +342,7 @@ func TestBreachV2Service_SearchPostRequestConstruction(t *testing.T) {
 		"from":       {"2026-03-01T00:00:00Z"},
 		"to":         {"2026-04-01T00:00:00Z"},
 		"date_field": {"pwned_at"},
-		"fields[]":   {"email", "email_domain"},
+		"fields":     {"email", "email_domain"},
 		"search_id":  {"search/post"},
 	}
 	if !reflect.DeepEqual(gotQuery, wantQuery) {
@@ -351,7 +351,7 @@ func TestBreachV2Service_SearchPostRequestConstruction(t *testing.T) {
 	if gotQuery.Get("filter") != "" || gotQuery.Get("filter_id") != "" {
 		t.Fatalf("POST query unexpectedly included structured filter params: %q", gotRawQuery)
 	}
-	if !strings.Contains(gotRawQuery, "search_id=search%2Fpost") || !strings.Contains(gotRawQuery, "fields%5B%5D=email_domain") {
+	if !strings.Contains(gotRawQuery, "search_id=search%2Fpost") || !strings.Contains(gotRawQuery, "fields=email_domain") {
 		t.Fatalf("raw query %q did not preserve escaping for search_id/fields", gotRawQuery)
 	}
 
@@ -380,7 +380,7 @@ func TestBreachV2Service_AutocompleteRequestConstruction(t *testing.T) {
 		response  string
 	}{
 		{
-			name: "value autocomplete sends field query limit and include_info",
+			name: "value autocomplete sends documented options only",
 			call: func(client *Client) error {
 				resp, err := client.Breach.Autocomplete(&BreachV2AutocompleteOptions{
 					Field:       "email_domain",
@@ -398,10 +398,9 @@ func TestBreachV2Service_AutocompleteRequestConstruction(t *testing.T) {
 			},
 			wantPath: "/service/v2/breach/autocomplete",
 			wantQuery: url.Values{
-				"field":        {"email_domain"},
-				"q":            {"g mail"},
-				"limit":        {"7"},
-				"include_info": {"true"},
+				"field": {"email_domain"},
+				"q":     {"g mail"},
+				"limit": {"7"},
 			},
 			response: `{"items":[{"field":"email_domain","value":"gmail.com","count":1200}],"took_ms":2}`,
 		},

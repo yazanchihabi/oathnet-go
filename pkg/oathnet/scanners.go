@@ -158,18 +158,29 @@ type ScannerRunsOptions struct {
 // ScannerCreateRequest contains scanner creation fields.
 type ScannerCreateRequest struct {
 	Name                string             `json:"name"`
-	ScannerType         string             `json:"scanner_type"`
-	QueryConfig         ScannerQueryConfig `json:"query_config"`
-	NotificationType    string             `json:"notification_type"`
+	ScannerType         string             `json:"scanner_type,omitempty"`
+	QueryConfig         ScannerQueryConfig `json:"query_config,omitempty"`
+	NotificationType    string             `json:"notification_type,omitempty"`
+	DestinationUID      string             `json:"destination_uid,omitempty"`
 	WebhookURL          string             `json:"webhook_url,omitempty"`
 	WebhookSecret       string             `json:"webhook_secret,omitempty"`
 	WebhookSecurityMode string             `json:"webhook_security_mode,omitempty"`
 	NotifyOnZeroResults *bool              `json:"notify_on_zero_results,omitempty"`
 }
 
+func (r ScannerCreateRequest) MarshalJSON() ([]byte, error) {
+	type alias ScannerCreateRequest
+	fields := map[string]interface{}{}
+	if r.QueryConfig != nil {
+		fields["query_config"] = r.QueryConfig
+	}
+	return marshalRequestFields(alias(r), fields)
+}
+
 // ScannerUpdateRequest contains partial scanner update fields.
 // It intentionally has no status field; use Pause or Resume for state changes.
 type ScannerUpdateRequest struct {
+	DestinationUID      string             `json:"destination_uid,omitempty"`
 	Name                string             `json:"name,omitempty"`
 	ScannerType         string             `json:"scanner_type,omitempty"`
 	QueryConfig         ScannerQueryConfig `json:"query_config,omitempty"`
@@ -178,6 +189,15 @@ type ScannerUpdateRequest struct {
 	WebhookSecret       string             `json:"webhook_secret,omitempty"`
 	WebhookSecurityMode string             `json:"webhook_security_mode,omitempty"`
 	NotifyOnZeroResults *bool              `json:"notify_on_zero_results,omitempty"`
+}
+
+func (r ScannerUpdateRequest) MarshalJSON() ([]byte, error) {
+	type alias ScannerUpdateRequest
+	fields := map[string]interface{}{}
+	if r.QueryConfig != nil {
+		fields["query_config"] = r.QueryConfig
+	}
+	return marshalRequestFields(alias(r), fields)
 }
 
 // ScannerDraftTestRequest contains delivery-test fields for an unsaved scanner.
@@ -202,6 +222,9 @@ type ScannerQuotaResponse struct {
 
 // Scanner is a saved scanner configuration and status snapshot.
 type Scanner struct {
+	DestinationUID             *string            `json:"destination_uid,omitempty"`
+	DestinationName            string             `json:"destination_name,omitempty"`
+	DestinationTargetHint      string             `json:"destination_target_hint,omitempty"`
 	UID                        string             `json:"uid"`
 	User                       string             `json:"user,omitempty"`
 	Name                       string             `json:"name"`

@@ -96,7 +96,7 @@ func TestStealerV2Service_SearchPostRequestConstruction(t *testing.T) {
 		"from":       {"2026-01-01T00:00:00Z"},
 		"to":         {"2026-02-01T00:00:00Z"},
 		"date_field": {"indexed_at"},
-		"fields[]":   {"id", "log_id"},
+		"fields":     {"id", "log_id"},
 		"search_id":  {"sess/123"},
 		"view":       {"enriched"},
 	}
@@ -228,26 +228,26 @@ func TestVictimsService_SearchRequestConstruction(t *testing.T) {
 		"total_docs_max":    {"20"},
 		"service_count_min": {"1"},
 		"service_count_max": {"8"},
-		"email[]":           {"alice@example.com"},
-		"email_domain[]":    {"example.com"},
-		"ip[]":              {"203.0.113.11"},
-		"hwid[]":            {"hwid-1"},
-		"discord_id[]":      {"1234567890"},
-		"username[]":        {"alice"},
-		"country[]":         {"US"},
-		"city[]":            {"New York"},
-		"os[]":              {"Windows"},
-		"service[]":         {"discord"},
-		"steam_id[]":        {"steam-1"},
-		"steam_name[]":      {"AliceSteam"},
-		"phone[]":           {"+15551234567"},
-		"domain[]":          {"example.com"},
-		"subdomain[]":       {"accounts.example.com"},
-		"identity_state[]":  {"active"},
-		"victim_ip[]":       {"198.51.100.4"},
-		"antivirus[]":       {"defender"},
-		"infection_path[]":  {"C:/Users/Alice"},
-		"fields[]":          {"log_id", "device_users"},
+		"email":             {"alice@example.com"},
+		"email_domain":      {"example.com"},
+		"ip":                {"203.0.113.11"},
+		"hwid":              {"hwid-1"},
+		"discord_id":        {"1234567890"},
+		"username":          {"alice"},
+		"country":           {"US"},
+		"city":              {"New York"},
+		"os":                {"Windows"},
+		"service":           {"discord"},
+		"steam_id":          {"steam-1"},
+		"steam_name":        {"AliceSteam"},
+		"phone":             {"+15551234567"},
+		"domain":            {"example.com"},
+		"subdomain":         {"accounts.example.com"},
+		"identity_state":    {"active"},
+		"victim_ip":         {"198.51.100.4"},
+		"antivirus":         {"defender"},
+		"infection_path":    {"C:/Users/Alice"},
+		"fields":            {"log_id", "device_users"},
 		"view":              {"enriched"},
 		"search_id":         {"session-123"},
 	}
@@ -350,7 +350,7 @@ func TestVictimsService_SearchPostRequestConstruction(t *testing.T) {
 		"from":       {"2026-03-01T00:00:00Z"},
 		"to":         {"2026-04-01T00:00:00Z"},
 		"date_field": {"pwned_at"},
-		"fields[]":   {"log_id", "services"},
+		"fields":     {"log_id", "services"},
 		"search_id":  {"sess-victims"},
 		"view":       {"enriched"},
 	}
@@ -531,7 +531,7 @@ func TestVictimsService_PropertiesSearchAndDetailRequestConstruction(t *testing.
 					Active:                &active,
 					SourceType:            "cookies",
 					SourcePath:            "not-a-query-param",
-					SourceFileID:          "not-a-query-param",
+					SourceFileID:          "file_selected",
 					Confidence:            []string{"high", "medium"},
 					ConfidenceMin:         &confidenceMin,
 					IncludeCookieEvidence: &includeCookieEvidence,
@@ -556,6 +556,7 @@ func TestVictimsService_PropertiesSearchAndDetailRequestConstruction(t *testing.
 				"domain":                  {"example.com"},
 				"active":                  {"false"},
 				"source_type":             {"cookies"},
+				"source_file_id":          {"file_selected"},
 				"confidence":              {"high", "medium"},
 				"confidence_min":          {"0.75"},
 				"include_cookie_evidence": {"true"},
@@ -676,8 +677,8 @@ func TestVictimsService_PropertiesSearchAndDetailRequestConstruction(t *testing.
 			if !reflect.DeepEqual(gotQuery, tt.wantQuery) {
 				t.Fatalf("query = %#v, want %#v", gotQuery, tt.wantQuery)
 			}
-			if gotQuery.Get("source_path") != "" || gotQuery.Get("source_file_id") != "" {
-				t.Fatalf("query unexpectedly included POST-only source fields: %#v", gotQuery)
+			if gotQuery.Get("source_path") != "" {
+				t.Fatalf("query included unsupported source_path filter: %#v", gotQuery)
 			}
 			if !reflect.DeepEqual(gotBody, tt.wantBody) {
 				t.Fatalf("body = %#v, want %#v", gotBody, tt.wantBody)

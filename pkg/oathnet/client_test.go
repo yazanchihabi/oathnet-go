@@ -1,6 +1,8 @@
 package oathnet
 
 import (
+	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 )
@@ -116,7 +118,12 @@ func TestClientIntegration(t *testing.T) {
 }
 
 func TestInvalidAPIKey(t *testing.T) {
-	client, _ := NewClient("invalid-api-key")
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusUnauthorized)
+		_, _ = w.Write([]byte(`{"message":"Invalid API key"}`))
+	}))
+	defer server.Close()
+	client, _ := NewClient("invalid-api-key", WithBaseURL(server.URL))
 
 	_, err := client.Search.Breach("test", nil)
 	if err == nil {

@@ -76,6 +76,14 @@ type InvestigationSearchOptions struct {
 	View                  string
 	IncludeCookieEvidence bool
 	ExcludeCookieEvidence bool
+	From                  string
+	To                    string
+	DateField             string
+	Sort                  string
+	Fields                []string
+	Wildcard              bool
+	LogID                 string
+	HasLogID              bool
 	ExtraQuery            map[string][]string
 }
 
@@ -89,27 +97,29 @@ type V2InvestigationCursors map[string]*string
 
 // V2InvestigationSearchRequest is the JSON body for POST investigation search.
 type V2InvestigationSearchRequest struct {
-	Q          string                        `json:"q,omitempty"`
-	Scope      string                        `json:"scope,omitempty"`
-	Include    []string                      `json:"include,omitempty"`
-	FilterMode string                        `json:"filter_mode,omitempty"`
-	Compact    bool                          `json:"compact,omitempty"`
-	PageSize   int                           `json:"page_size,omitempty"`
-	View       string                        `json:"view,omitempty"`
-	SearchID   string                        `json:"search_id,omitempty"`
-	Wildcard   bool                          `json:"wildcard,omitempty"`
-	From       string                        `json:"from,omitempty"`
-	To         string                        `json:"to,omitempty"`
-	DateField  string                        `json:"date_field,omitempty"`
-	LogID      string                        `json:"log_id,omitempty"`
-	HasLogID   bool                          `json:"has_log_id,omitempty"`
-	Sort       string                        `json:"sort,omitempty"`
-	Fields     []string                      `json:"fields,omitempty"`
-	Filter     interface{}                   `json:"filter,omitempty"`
-	FilterID   string                        `json:"filter_id,omitempty"`
-	Filters    V2InvestigationSectionFilters `json:"filters,omitempty"`
-	Cursors    V2InvestigationCursors        `json:"cursors,omitempty"`
-	Extra      map[string]interface{}        `json:"-"`
+	Q                     string                        `json:"q,omitempty"`
+	Scope                 string                        `json:"scope,omitempty"`
+	Include               []string                      `json:"include,omitempty"`
+	FilterMode            string                        `json:"filter_mode,omitempty"`
+	Compact               bool                          `json:"compact,omitempty"`
+	PageSize              int                           `json:"page_size,omitempty"`
+	View                  string                        `json:"view,omitempty"`
+	SearchID              string                        `json:"search_id,omitempty"`
+	Wildcard              bool                          `json:"wildcard,omitempty"`
+	From                  string                        `json:"from,omitempty"`
+	To                    string                        `json:"to,omitempty"`
+	DateField             string                        `json:"date_field,omitempty"`
+	LogID                 string                        `json:"log_id,omitempty"`
+	HasLogID              bool                          `json:"has_log_id,omitempty"`
+	Sort                  string                        `json:"sort,omitempty"`
+	Fields                []string                      `json:"fields,omitempty"`
+	Filter                interface{}                   `json:"filter,omitempty"`
+	FilterID              string                        `json:"filter_id,omitempty"`
+	Filters               V2InvestigationSectionFilters `json:"filters,omitempty"`
+	Cursors               V2InvestigationCursors        `json:"cursors,omitempty"`
+	IncludeCookieEvidence bool                          `json:"include_cookie_evidence,omitempty"`
+	ExcludeCookieEvidence bool                          `json:"exclude_cookie_evidence,omitempty"`
+	Extra                 map[string]interface{}        `json:"-"`
 }
 
 // MarshalJSON merges documented request fields with additional OpenAPI
@@ -127,6 +137,12 @@ func (r V2InvestigationSearchRequest) MarshalJSON() ([]byte, error) {
 	if err := json.Unmarshal(data, &payload); err != nil {
 		return nil, err
 	}
+	if r.Filters != nil {
+		payload["filters"] = r.Filters
+	}
+	if r.Cursors != nil {
+		payload["cursors"] = r.Cursors
+	}
 	for key, value := range r.Extra {
 		payload[key] = value
 	}
@@ -136,10 +152,12 @@ func (r V2InvestigationSearchRequest) MarshalJSON() ([]byte, error) {
 
 // PhonebookOptions contains options for V2 phonebook domain intelligence.
 type PhonebookOptions struct {
-	Query    string
-	Alive    bool
-	IsAlive  bool
-	SearchID string
+	Query        string
+	Alive        bool
+	IsAlive      bool
+	SearchID     string
+	AliveValue   *bool // Overrides Alive, including an explicit false.
+	IsAliveValue *bool // Overrides IsAlive, including an explicit false.
 }
 
 // SubdomainOptions contains options for V2 stealer subdomain extraction.
@@ -155,7 +173,12 @@ func (s *StealerV2Service) Search(query string, opts *StealerSearchOptions) (*V2
 	if stealerSearchNeedsBody(opts) {
 		return s.searchPostFromOptions(query, opts)
 	}
+	return s.SearchGet(query, opts)
+}
 
+// SearchGet explicitly uses GET, including structured filters encoded in the query.
+// Search keeps its existing automatic POST behavior for structured filters.
+func (s *StealerV2Service) SearchGet(query string, opts *StealerSearchOptions) (*V2StealerResponse, error) {
 	params, err := buildStealerV2SearchParams(query, opts, true)
 	if err != nil {
 		return nil, err
@@ -264,6 +287,24 @@ func investigationBodyFromOptions(query string, opts *InvestigationSearchOptions
 	body.FilterID = opts.FilterID
 	body.Filters = opts.Filters
 	body.Cursors = opts.Cursors
+	body.From = opts.From
+	body.To = opts.To
+	body.DateField = opts.DateField
+	body.Sort = opts.Sort
+	body.Fields = opts.Fields
+	body.Wildcard = opts.Wildcard
+	body.LogID = opts.LogID
+	body.HasLogID = opts.HasLogID
+	body.IncludeCookieEvidence = opts.IncludeCookieEvidence
+	body.ExcludeCookieEvidence = opts.ExcludeCookieEvidence
+	body.Extra = make(map[string]interface{}, len(opts.ExtraQuery))
+	for key, values := range opts.ExtraQuery {
+		if len(values) == 1 {
+			body.Extra[key] = values[0]
+		} else {
+			body.Extra[key] = values
+		}
+	}
 	return body
 }
 
@@ -353,6 +394,14 @@ func buildInvestigationSearchParams(query string, opts *InvestigationSearchOptio
 	addStringParam(params, "view", opts.View)
 	addBoolParam(params, "include_cookie_evidence", opts.IncludeCookieEvidence)
 	addBoolParam(params, "exclude_cookie_evidence", opts.ExcludeCookieEvidence)
+	addStringParam(params, "from", opts.From)
+	addStringParam(params, "to", opts.To)
+	addStringParam(params, "date_field", opts.DateField)
+	addStringParam(params, "sort", opts.Sort)
+	addRepeatedParam(params, "fields", opts.Fields)
+	addBoolParam(params, "wildcard", opts.Wildcard)
+	addStringParam(params, "log_id", opts.LogID)
+	addBoolParam(params, "has_log_id", opts.HasLogID)
 
 	for key, values := range opts.ExtraQuery {
 		addRepeatedParam(params, key, values)
@@ -371,6 +420,8 @@ func buildPhonebookParams(domain string, opts *PhonebookOptions) url.Values {
 	addStringParam(params, "q", opts.Query)
 	addBoolParam(params, "alive", opts.Alive)
 	addBoolParam(params, "is_alive", opts.IsAlive)
+	addBoolPtrParam(params, "alive", opts.AliveValue)
+	addBoolPtrParam(params, "is_alive", opts.IsAliveValue)
 	addStringParam(params, "search_id", opts.SearchID)
 
 	return params
@@ -400,21 +451,21 @@ func buildStealerV2SearchParams(query string, opts *StealerSearchOptions, includ
 		addStringParam(params, "filter_id", opts.FilterID)
 	}
 
-	addSingleAndRepeatedParam(params, "domain[]", opts.Domain, opts.Domains)
-	addSingleAndRepeatedParam(params, "subdomain[]", opts.Subdomain, opts.Subdomains)
-	addSingleAndRepeatedParam(params, "email[]", opts.Email, opts.Emails)
-	addRepeatedParam(params, "email_domain[]", opts.EmailDomains)
-	addSingleAndRepeatedParam(params, "username[]", opts.Username, opts.Usernames)
-	addSingleAndRepeatedParam(params, "password[]", opts.Password, opts.Passwords)
-	addRepeatedParam(params, "password_hash[]", opts.PasswordHashes)
-	addRepeatedParam(params, "path[]", opts.Paths)
-	addRepeatedParam(params, "ip[]", opts.IPs)
-	addRepeatedParam(params, "hwid[]", opts.HWIDs)
-	addRepeatedParam(params, "discord_id[]", opts.DiscordIDs)
-	addRepeatedParam(params, "source_type[]", opts.SourceTypes)
-	addRepeatedParam(params, "archive_hash[]", opts.ArchiveHashes)
-	addRepeatedParam(params, "canonical_credential_id[]", opts.CanonicalCredentialIDs)
-	addRepeatedParam(params, "fields[]", opts.Fields)
+	addSingleAndRepeatedParam(params, "domain", opts.Domain, opts.Domains)
+	addSingleAndRepeatedParam(params, "subdomain", opts.Subdomain, opts.Subdomains)
+	addSingleAndRepeatedParam(params, "email", opts.Email, opts.Emails)
+	addRepeatedParam(params, "email_domain", opts.EmailDomains)
+	addSingleAndRepeatedParam(params, "username", opts.Username, opts.Usernames)
+	addSingleAndRepeatedParam(params, "password", opts.Password, opts.Passwords)
+	addRepeatedParam(params, "password_hash", opts.PasswordHashes)
+	addRepeatedParam(params, "path", opts.Paths)
+	addRepeatedParam(params, "ip", opts.IPs)
+	addRepeatedParam(params, "hwid", opts.HWIDs)
+	addRepeatedParam(params, "discord_id", opts.DiscordIDs)
+	addRepeatedParam(params, "source_type", opts.SourceTypes)
+	addRepeatedParam(params, "archive_hash", opts.ArchiveHashes)
+	addRepeatedParam(params, "canonical_credential_id", opts.CanonicalCredentialIDs)
+	addRepeatedParam(params, "fields", opts.Fields)
 	addStringParam(params, "search_id", opts.SearchID)
 	addStringParam(params, "view", opts.View)
 

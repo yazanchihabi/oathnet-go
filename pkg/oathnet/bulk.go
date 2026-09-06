@@ -1,7 +1,6 @@
 package oathnet
 
 import (
-	"encoding/json"
 	"fmt"
 	"net/url"
 	"os"
@@ -30,6 +29,15 @@ type BulkSearchCreateRequest struct {
 	QueryConfig BulkSearchQueryConfig `json:"query_config,omitempty"`
 	Limit       int                   `json:"limit,omitempty"`
 	Fields      []string              `json:"fields,omitempty"`
+}
+
+func (r BulkSearchCreateRequest) MarshalJSON() ([]byte, error) {
+	type alias BulkSearchCreateRequest
+	fields := map[string]interface{}{}
+	if r.QueryConfig != nil {
+		fields["query_config"] = r.QueryConfig
+	}
+	return marshalRequestFields(alias(r), fields)
 }
 
 // BulkCreateOptions contains options for creating a bulk job.
@@ -106,7 +114,7 @@ func (s *BulkService) List(page, pageSize int) (*BulkJobListResponse, error) {
 
 // Download downloads bulk search results.
 func (s *BulkService) Download(jobID, outputPath string) error {
-	data, err := s.client.getRaw(bulkSearchJobPath(jobID, "/download"))
+	data, err := s.DownloadBytes(jobID)
 	if err != nil {
 		return err
 	}
@@ -114,37 +122,28 @@ func (s *BulkService) Download(jobID, outputPath string) error {
 	return os.WriteFile(outputPath, data, 0644)
 }
 
+// DownloadBytes downloads a completed bulk job without writing to disk.
+func (s *BulkService) DownloadBytes(jobID string) ([]byte, error) {
+	return s.client.getRaw(bulkSearchJobPath(jobID, "/download"))
+}
+
+// DownloadResponse downloads a completed bulk job with its content headers.
+func (s *BulkService) DownloadResponse(jobID string) (*DownloadResponse, error) {
+	return s.client.getRawResponse(bulkSearchJobPath(jobID, "/download"), nil)
+}
+
 // WaitForCompletion waits for a bulk job to complete.
 func (s *BulkService) WaitForCompletion(jobID string, pollInterval, timeout time.Duration) (*BulkJobResponse, error) {
-	startTime := time.Now()
-
-	for {
-		resp, err := s.GetStatus(jobID)
+	return pollJob(s.client, jobID, pollInterval, timeout, func(client *Client) (*BulkJobResponse, bool, string, string, int, error) {
+		resp, err := client.Bulk.GetStatus(jobID)
 		if err != nil {
-			return nil, err
+			return nil, false, "", "", 0, err
 		}
-
-		if resp.Data != nil {
-			status := resp.Data.Status
-			if status == "completed" || status == "canceled" {
-				return resp, nil
-			}
+		if resp.Data == nil {
+			return resp, false, "", resp.Message, 0, nil
 		}
-
-		elapsed := time.Since(startTime)
-		if elapsed >= timeout {
-			return nil, fmt.Errorf("bulk job %s did not complete within %v", jobID, timeout)
-		}
-
-		sleepTime := pollInterval
-		if resp.Data != nil && resp.Data.NextPollAfterMs > 0 {
-			suggested := time.Duration(resp.Data.NextPollAfterMs) * time.Millisecond
-			if suggested < sleepTime {
-				sleepTime = suggested
-			}
-		}
-		time.Sleep(sleepTime)
-	}
+		return resp, resp.Success, resp.Data.Status, resp.Data.LastError, resp.Data.NextPollAfterMs, nil
+	})
 }
 
 // Search creates a bulk search, waits for completion, and downloads.
@@ -171,24 +170,11 @@ func bulkSearchJobPath(jobID, suffix string) string {
 }
 
 func decodeBulkJobResponse(rawResp map[string]interface{}) (*BulkJobResponse, error) {
-	resp := &BulkJobResponse{Success: true}
-	jsonData, err := json.Marshal(rawResp)
+	success, message, data, err := decodeJobPayload[BulkJobData](rawResp)
 	if err != nil {
 		return nil, err
 	}
-
-	if _, ok := rawResp["success"]; ok {
-		if err := json.Unmarshal(jsonData, resp); err != nil {
-			return nil, err
-		}
-		return resp, nil
-	}
-
-	resp.Data = &BulkJobData{}
-	if err := json.Unmarshal(jsonData, resp.Data); err != nil {
-		return nil, err
-	}
-	return resp, nil
+	return &BulkJobResponse{Success: success, Message: message, Data: data}, nil
 }
 
 func splitCommaList(value string) []string {

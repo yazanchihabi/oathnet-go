@@ -10,6 +10,7 @@ type OSINTService struct {
 // OSINTOptions contains optional query params shared by OSINT lookups.
 type OSINTOptions struct {
 	SearchID string
+	Alive    *bool // Optional alive alias for ExtractSubdomain only.
 }
 
 func applyOSINTOptions(params url.Values, opts []OSINTOptions) {
@@ -145,6 +146,9 @@ func (s *OSINTService) ExtractSubdomain(domain string, isAlive *bool, opts ...OS
 		}
 	}
 	applyOSINTOptions(params, opts)
+	for _, opt := range opts {
+		addBoolPtrParam(params, "alive", opt.Alive)
+	}
 
 	var resp ExtractSubdomainResponse
 	err := s.client.get("/service/extract-subdomain", params, &resp)

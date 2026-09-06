@@ -45,21 +45,9 @@ func TestErrorTypes(t *testing.T) {
 func TestErrorTypeAssertion(t *testing.T) {
 	client, _ := NewClient("invalid-api-key")
 
-	_, err := client.Search.Breach("test", nil)
-	if err == nil {
-		t.Error("Expected error for invalid API key")
-		return
-	}
-
-	// Error should be AuthenticationError or ValidationError
-	switch err.(type) {
-	case *AuthenticationError:
-		// Expected
-	case *ValidationError:
-		// Also acceptable
-	default:
-		// Other error types are fine too, API behavior may vary
-		t.Logf("Got error type: %T", err)
+	err := client.parseError(401, []byte(`{"message":"Invalid API key"}`))
+	if _, ok := err.(*AuthenticationError); !ok {
+		t.Fatalf("expected AuthenticationError, got %T", err)
 	}
 }
 

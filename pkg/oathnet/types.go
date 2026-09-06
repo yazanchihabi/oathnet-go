@@ -2,6 +2,8 @@ package oathnet
 
 import (
 	"encoding/json"
+	"fmt"
+	"reflect"
 	"strings"
 )
 
@@ -24,7 +26,7 @@ func (v *FlexibleString) UnmarshalJSON(data []byte) error {
 		*v = FlexibleString(strings.Join(list, ","))
 		return nil
 	}
-	return nil
+	return fmt.Errorf("expected a string or string array, got %s", data)
 }
 
 // FlexibleStringList accepts fields that are usually arrays but can arrive as a
@@ -50,15 +52,25 @@ func (v *FlexibleStringList) UnmarshalJSON(data []byte) error {
 		*v = list
 		return nil
 	}
-	return nil
+	return fmt.Errorf("expected a string or string array, got %s", data)
 }
 
 // ResponseMeta contains metadata about the API response.
 type ResponseMeta struct {
-	User        *UserMeta        `json:"user,omitempty"`
-	Lookups     *LookupsMeta     `json:"lookups,omitempty"`
-	Service     *ServiceMeta     `json:"service,omitempty"`
-	Performance *PerformanceMeta `json:"performance,omitempty"`
+	User         *UserMeta           `json:"user,omitempty"`
+	Lookups      *LookupsMeta        `json:"lookups,omitempty"`
+	Service      *ServiceMeta        `json:"service,omitempty"`
+	Performance  *PerformanceMeta    `json:"performance,omitempty"`
+	ResultAccess *SearchResultAccess `json:"result_access,omitempty"`
+}
+
+// SearchResultAccess explains whether a result page is complete or limited.
+type SearchResultAccess struct {
+	Availability        string `json:"availability,omitempty"`
+	CountRelation       string `json:"count_relation,omitempty"`
+	RevealedCount       int    `json:"revealed_count"`
+	LockedPreviewCount  int    `json:"locked_preview_count"`
+	PageRevealAllowance int    `json:"page_reveal_allowance"`
 }
 
 type UserMeta struct {
@@ -354,16 +366,19 @@ type V2StealerResponse struct {
 	Success bool           `json:"success"`
 	Message string         `json:"message,omitempty"`
 	Data    *V2StealerData `json:"data,omitempty"`
+	Meta    *ResponseMeta  `json:"_meta,omitempty"`
 }
 
 type V2SearchMeta struct {
-	Total      int     `json:"total,omitempty"`
-	Count      int     `json:"count,omitempty"`
-	TookMs     int     `json:"took_ms,omitempty"`
-	HasMore    bool    `json:"has_more,omitempty"`
-	TotalPages int     `json:"total_pages,omitempty"`
-	MaxScore   float64 `json:"max_score,omitempty"`
-	FilterID   string  `json:"filter_id,omitempty"`
+	Total         int     `json:"total,omitempty"`
+	Count         int     `json:"count,omitempty"`
+	TookMs        int     `json:"took_ms,omitempty"`
+	HasMore       bool    `json:"has_more,omitempty"`
+	TotalPages    int     `json:"total_pages,omitempty"`
+	MaxScore      float64 `json:"max_score,omitempty"`
+	FilterID      string  `json:"filter_id,omitempty"`
+	TotalRelation string  `json:"total_relation,omitempty"`
+	QueryTimeMs   float64 `json:"query_time_ms,omitempty"`
 }
 
 type V2StealerData struct {
@@ -375,6 +390,9 @@ type V2StealerData struct {
 	VictimsNextCursor string             `json:"victims_next_cursor,omitempty"`
 	CredentialStats   *V2CredentialStats `json:"credential_stats,omitempty"`
 	APIMeta           *ResponseMeta      `json:"_meta,omitempty"`
+	PolicyRedacted    bool               `json:"policy_redacted,omitempty"`
+	UpgradeRequired   bool               `json:"upgrade_required,omitempty"`
+	RedactionMarker   string             `json:"redaction_marker,omitempty"`
 }
 
 type V2StealerResult struct {
@@ -399,6 +417,8 @@ type V2StealerResult struct {
 	IsRelatedCredential    bool     `json:"is_related_credential,omitempty"`
 	PwnedAt                string   `json:"pwned_at,omitempty"`
 	IndexedAt              string   `json:"indexed_at,omitempty"`
+	Redacted               bool     `json:"redacted,omitempty"`
+	UpgradeRequired        bool     `json:"upgrade_required,omitempty"`
 }
 
 type V2CredentialStats struct {
@@ -434,6 +454,7 @@ type V2InvestigationSearchResponse struct {
 	Success bool                       `json:"success"`
 	Message string                     `json:"message,omitempty"`
 	Data    *V2InvestigationSearchData `json:"data,omitempty"`
+	Meta    *ResponseMeta              `json:"_meta,omitempty"`
 }
 
 type V2InvestigationSearchData struct {
@@ -560,53 +581,102 @@ type V2BreachSearchResponse struct {
 	Success bool                `json:"success"`
 	Message string              `json:"message,omitempty"`
 	Data    *V2BreachSearchData `json:"data,omitempty"`
+	Meta    *ResponseMeta       `json:"_meta,omitempty"`
 }
 
 type V2BreachSearchData struct {
-	Items      []V2BreachResult          `json:"items"`
-	Meta       *V2SearchMeta             `json:"meta,omitempty"`
-	DBNameInfo map[string]V2LeakMetadata `json:"dbname_info,omitempty"`
-	NextCursor string                    `json:"next_cursor,omitempty"`
-	APIMeta    map[string]interface{}    `json:"_meta,omitempty"`
+	Items           []V2BreachResult          `json:"items"`
+	Meta            *V2SearchMeta             `json:"meta,omitempty"`
+	DBNameInfo      map[string]V2LeakMetadata `json:"dbname_info,omitempty"`
+	NextCursor      string                    `json:"next_cursor,omitempty"`
+	APIMeta         map[string]interface{}    `json:"_meta,omitempty"`
+	PolicyRedacted  bool                      `json:"policy_redacted,omitempty"`
+	UpgradeRequired bool                      `json:"upgrade_required,omitempty"`
+	RedactionMarker string                    `json:"redaction_marker,omitempty"`
 }
 
+// V2BreachResult is a source document. Raw retains every original JSON field,
+// including arrays, objects, nulls, and fields not listed below. The scalar
+// convenience fields are populated only when the source has that scalar type.
 type V2BreachResult struct {
-	ID            string                 `json:"id,omitempty"`
-	Email         string                 `json:"email,omitempty"`
-	EmailDomain   string                 `json:"email_domain,omitempty"`
-	Username      string                 `json:"username,omitempty"`
-	Password      string                 `json:"password,omitempty"`
-	PasswordHash  string                 `json:"password_hash,omitempty"`
-	Salt          string                 `json:"salt,omitempty"`
-	FullName      string                 `json:"full_name,omitempty"`
-	FirstName     string                 `json:"first_name,omitempty"`
-	LastName      string                 `json:"last_name,omitempty"`
-	MiddleName    string                 `json:"middle_name,omitempty"`
-	DisplayName   string                 `json:"display_name,omitempty"`
-	PhoneNumber   string                 `json:"phone_number,omitempty"`
-	PhoneNational string                 `json:"phone_national,omitempty"`
-	AddressStreet string                 `json:"address_street,omitempty"`
-	City          string                 `json:"city,omitempty"`
-	State         string                 `json:"state,omitempty"`
-	PostalCode    string                 `json:"postal_code,omitempty"`
-	Country       string                 `json:"country,omitempty"`
-	DateBirth     string                 `json:"date_birth,omitempty"`
-	Age           int                    `json:"age,omitempty"`
-	CreatedAt     string                 `json:"created_at,omitempty"`
-	LastLogin     string                 `json:"last_login,omitempty"`
-	IndexedAt     string                 `json:"indexed_at,omitempty"`
-	IP            string                 `json:"ip,omitempty"`
-	DiscordID     string                 `json:"discordid,omitempty"`
-	Instagram     string                 `json:"instagram,omitempty"`
-	LinkedIn      string                 `json:"linkedin,omitempty"`
-	IBAN          string                 `json:"iban,omitempty"`
-	SSN           string                 `json:"ssn,omitempty"`
-	DBName        string                 `json:"dbname,omitempty"`
-	Gender        string                 `json:"gender,omitempty"`
-	Language      string                 `json:"language,omitempty"`
-	Bio           string                 `json:"bio,omitempty"`
-	Location      string                 `json:"location,omitempty"`
-	Extra         map[string]interface{} `json:"extra,omitempty"`
+	ID              string                     `json:"id,omitempty"`
+	Email           string                     `json:"email,omitempty"`
+	EmailDomain     string                     `json:"email_domain,omitempty"`
+	Username        string                     `json:"username,omitempty"`
+	Password        string                     `json:"password,omitempty"`
+	PasswordHash    string                     `json:"password_hash,omitempty"`
+	Salt            string                     `json:"salt,omitempty"`
+	FullName        string                     `json:"full_name,omitempty"`
+	FirstName       string                     `json:"first_name,omitempty"`
+	LastName        string                     `json:"last_name,omitempty"`
+	MiddleName      string                     `json:"middle_name,omitempty"`
+	DisplayName     string                     `json:"display_name,omitempty"`
+	PhoneNumber     string                     `json:"phone_number,omitempty"`
+	PhoneNational   string                     `json:"phone_national,omitempty"`
+	AddressStreet   string                     `json:"address_street,omitempty"`
+	City            string                     `json:"city,omitempty"`
+	State           string                     `json:"state,omitempty"`
+	PostalCode      string                     `json:"postal_code,omitempty"`
+	Country         string                     `json:"country,omitempty"`
+	DateBirth       string                     `json:"date_birth,omitempty"`
+	Age             int                        `json:"age,omitempty"`
+	CreatedAt       string                     `json:"created_at,omitempty"`
+	LastLogin       string                     `json:"last_login,omitempty"`
+	IndexedAt       string                     `json:"indexed_at,omitempty"`
+	IP              string                     `json:"ip,omitempty"`
+	DiscordID       string                     `json:"discordid,omitempty"`
+	Instagram       string                     `json:"instagram,omitempty"`
+	LinkedIn        string                     `json:"linkedin,omitempty"`
+	IBAN            string                     `json:"iban,omitempty"`
+	SSN             string                     `json:"ssn,omitempty"`
+	DBName          string                     `json:"dbname,omitempty"`
+	Gender          string                     `json:"gender,omitempty"`
+	Language        string                     `json:"language,omitempty"`
+	Bio             string                     `json:"bio,omitempty"`
+	Location        string                     `json:"location,omitempty"`
+	Extra           map[string]interface{}     `json:"extra,omitempty"`
+	Raw             map[string]json.RawMessage `json:"-"`
+	Redacted        bool                       `json:"redacted,omitempty"`
+	UpgradeRequired bool                       `json:"upgrade_required,omitempty"`
+}
+
+func (r *V2BreachResult) UnmarshalJSON(data []byte) error {
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+	if raw == nil {
+		return fmt.Errorf("breach record must be an object")
+	}
+	type resultAlias V2BreachResult
+	var decoded resultAlias
+	value := reflect.ValueOf(&decoded).Elem()
+	typ := value.Type()
+	for i := 0; i < value.NumField(); i++ {
+		name := strings.Split(typ.Field(i).Tag.Get("json"), ",")[0]
+		field, ok := raw[name]
+		if !ok || name == "-" {
+			continue
+		}
+		if err := json.Unmarshal(field, value.Field(i).Addr().Interface()); err != nil {
+			if name == "id" || name == "redacted" || name == "upgrade_required" {
+				return fmt.Errorf("invalid breach record %s: %w", name, err)
+			}
+			// Dynamic source values remain available in Raw; never stringify them.
+			value.Field(i).Set(reflect.Zero(value.Field(i).Type()))
+		}
+	}
+	decoded.Raw = raw
+	*r = V2BreachResult(decoded)
+	return nil
+}
+
+func (r V2BreachResult) MarshalJSON() ([]byte, error) {
+	if r.Raw != nil {
+		return json.Marshal(r.Raw)
+	}
+	type resultAlias V2BreachResult
+	return json.Marshal(resultAlias(r))
 }
 
 type V2LeakMetadata struct {
@@ -660,13 +730,17 @@ type V2VictimsResponse struct {
 	Success bool           `json:"success"`
 	Message string         `json:"message,omitempty"`
 	Data    *V2VictimsData `json:"data,omitempty"`
+	Meta    *ResponseMeta  `json:"_meta,omitempty"`
 }
 
 type V2VictimsData struct {
-	Items      []V2VictimResult `json:"items"`
-	Meta       *V2SearchMeta    `json:"meta,omitempty"`
-	NextCursor string           `json:"next_cursor,omitempty"`
-	APIMeta    *ResponseMeta    `json:"_meta,omitempty"`
+	Items           []V2VictimResult `json:"items"`
+	Meta            *V2SearchMeta    `json:"meta,omitempty"`
+	NextCursor      string           `json:"next_cursor,omitempty"`
+	APIMeta         *ResponseMeta    `json:"_meta,omitempty"`
+	PolicyRedacted  bool             `json:"policy_redacted,omitempty"`
+	UpgradeRequired bool             `json:"upgrade_required,omitempty"`
+	RedactionMarker string           `json:"redaction_marker,omitempty"`
 }
 
 type V2VictimResult struct {
@@ -777,6 +851,54 @@ type V2VictimPropertyResult struct {
 	ConfidenceLabel string  `json:"confidence_label,omitempty"`
 	ConfidenceScore float64 `json:"confidence_score,omitempty"`
 	IndexedAt       string  `json:"indexed_at,omitempty"`
+	// Optional values distinguish an unreported state from false or zero.
+	// The scalar fields above remain populated for existing callers.
+	ActiveValue          *bool    `json:"-"`
+	ConfidenceValue      *float64 `json:"-"`
+	ConfidenceScoreValue *float64 `json:"-"`
+}
+
+func (r *V2VictimPropertyResult) UnmarshalJSON(data []byte) error {
+	type alias V2VictimPropertyResult
+	var base alias
+	fields := struct {
+		*alias
+		Active          *bool    `json:"active"`
+		Confidence      *float64 `json:"confidence"`
+		ConfidenceScore *float64 `json:"confidence_score"`
+	}{alias: &base}
+	if err := json.Unmarshal(data, &fields); err != nil {
+		return err
+	}
+	*r = V2VictimPropertyResult(base)
+	r.ActiveValue = fields.Active
+	r.ConfidenceValue = fields.Confidence
+	r.ConfidenceScoreValue = fields.ConfidenceScore
+	if fields.Active != nil {
+		r.Active = *fields.Active
+	}
+	if fields.Confidence != nil {
+		r.Confidence = *fields.Confidence
+	}
+	if fields.ConfidenceScore != nil {
+		r.ConfidenceScore = *fields.ConfidenceScore
+	}
+	return nil
+}
+
+func (r V2VictimPropertyResult) MarshalJSON() ([]byte, error) {
+	type alias V2VictimPropertyResult
+	fields := map[string]interface{}{}
+	if r.ActiveValue != nil {
+		fields["active"] = *r.ActiveValue
+	}
+	if r.ConfidenceValue != nil {
+		fields["confidence"] = *r.ConfidenceValue
+	}
+	if r.ConfidenceScoreValue != nil {
+		fields["confidence_score"] = *r.ConfidenceScoreValue
+	}
+	return marshalRequestFields(alias(r), fields)
 }
 
 type V2VictimSummaryResponse struct {
@@ -868,27 +990,36 @@ type FileSearchJobResponse struct {
 // FileSearchJobData represents file search job status.
 // Note: API returns this unwrapped (no success/data wrapper).
 type FileSearchJobData struct {
-	JobID           string              `json:"job_id,omitempty"`
-	Status          string              `json:"status,omitempty"` // queued, running, completed, canceled
-	CreatedAt       string              `json:"created_at,omitempty"`
-	StartedAt       string              `json:"started_at,omitempty"`
-	CompletedAt     string              `json:"completed_at,omitempty"`
-	ExpiresAt       string              `json:"expires_at,omitempty"`
-	NextPollAfterMs int                 `json:"next_poll_after_ms,omitempty"`
-	Progress        *FileSearchProgress `json:"progress,omitempty"`
-	Summary         *FileSearchSummary  `json:"summary,omitempty"`
-	Limits          *FileSearchLimits   `json:"limits,omitempty"`
-	Matches         []FileSearchMatch   `json:"matches,omitempty"`
-	APIMeta         *ResponseMeta       `json:"_meta,omitempty"`
+	ID              string                 `json:"id,omitempty"`
+	JobID           string                 `json:"job_id,omitempty"`
+	Status          string                 `json:"status,omitempty"` // queued, running, completed, failed, canceled
+	BillingStatus   string                 `json:"billing_status,omitempty"`
+	LookupsCharged  int                    `json:"lookups_charged,omitempty"`
+	LookupsRefunded int                    `json:"lookups_refunded,omitempty"`
+	RefundReason    string                 `json:"refund_reason,omitempty"`
+	StatusSource    string                 `json:"status_source,omitempty"`
+	ResultsCount    int                    `json:"results_count,omitempty"`
+	RequestSummary  map[string]interface{} `json:"request_summary,omitempty"`
+	Metadata        map[string]interface{} `json:"metadata,omitempty"`
+	CreatedAt       string                 `json:"created_at,omitempty"`
+	StartedAt       string                 `json:"started_at,omitempty"`
+	CompletedAt     string                 `json:"completed_at,omitempty"`
+	ExpiresAt       string                 `json:"expires_at,omitempty"`
+	NextPollAfterMs int                    `json:"next_poll_after_ms,omitempty"`
+	Progress        *FileSearchProgress    `json:"progress,omitempty"`
+	Summary         *FileSearchSummary     `json:"summary,omitempty"`
+	Limits          *FileSearchLimits      `json:"limits,omitempty"`
+	Matches         []FileSearchMatch      `json:"matches,omitempty"`
+	APIMeta         *ResponseMeta          `json:"_meta,omitempty"`
 }
 
 type FileSearchProgress struct {
-	LogsTotal     int    `json:"logs_total,omitempty"`
-	LogsCompleted int    `json:"logs_completed,omitempty"`
-	FilesTotal    int    `json:"files_total,omitempty"`
-	FilesScanned  int    `json:"files_scanned,omitempty"`
-	Percent       int    `json:"percent,omitempty"`
-	UpdatedAt     string `json:"updated_at,omitempty"`
+	LogsTotal     int     `json:"logs_total,omitempty"`
+	LogsCompleted int     `json:"logs_completed,omitempty"`
+	FilesTotal    int     `json:"files_total,omitempty"`
+	FilesScanned  int     `json:"files_scanned,omitempty"`
+	Percent       float64 `json:"percent,omitempty"`
+	UpdatedAt     string  `json:"updated_at,omitempty"`
 }
 
 type FileSearchSummary struct {
@@ -935,6 +1066,7 @@ type FileSearchMatch struct {
 	ColumnRange  *FileSearchColumnRange `json:"column_range,omitempty"`
 	MatchText    string                 `json:"match_text,omitempty"`
 	Snippet      *FileSearchSnippet     `json:"snippet,omitempty"`
+	Extra        map[string]interface{} `json:"extra,omitempty"`
 }
 
 // ============================================
@@ -1468,10 +1600,14 @@ type MinecraftHistoryResponse struct {
 }
 
 type MinecraftHistoryData struct {
-	UUID     string                  `json:"uuid,omitempty"`
-	Username string                  `json:"username"`
-	History  []MinecraftHistoryEntry `json:"history"`
-	Meta     *ResponseMeta           `json:"_meta,omitempty"`
+	UUID         string                  `json:"uuid,omitempty"`
+	Username     string                  `json:"username"`
+	History      []MinecraftHistoryEntry `json:"history"`
+	Meta         *ResponseMeta           `json:"_meta,omitempty"`
+	Cached       bool                    `json:"cached,omitempty"`
+	Disabled     bool                    `json:"disabled,omitempty"`
+	Skipped      bool                    `json:"skipped,omitempty"`
+	ResultsFound int                     `json:"results_found,omitempty"`
 }
 
 type MinecraftHistoryEntry struct {

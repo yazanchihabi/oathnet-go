@@ -77,17 +77,50 @@ type VictimsSearchOptions struct {
 
 // V2FileMetadataSearchRequest is the JSON body for POST /service/v2/files/search.
 type V2FileMetadataSearchRequest struct {
-	Query    string `json:"q,omitempty"`
-	LogID    string `json:"log_id,omitempty"`
-	Name     string `json:"name,omitempty"`
-	Folder   string `json:"folder,omitempty"`
-	Kind     string `json:"kind,omitempty"`
-	Ext      string `json:"ext,omitempty"`
-	SizeMin  int    `json:"size_min,omitempty"`
-	SizeMax  int    `json:"size_max,omitempty"`
-	PageSize int    `json:"page_size,omitempty"`
-	Cursor   string `json:"cursor,omitempty"`
-	SearchID string `json:"search_id,omitempty"`
+	Query    string   `json:"q,omitempty"`
+	LogID    string   `json:"log_id,omitempty"`
+	Name     string   `json:"name,omitempty"`
+	Folder   string   `json:"folder,omitempty"`
+	Kind     string   `json:"kind,omitempty"`
+	Ext      string   `json:"ext,omitempty"`
+	SizeMin  int      `json:"size_min,omitempty"`
+	SizeMax  int      `json:"size_max,omitempty"`
+	PageSize int      `json:"page_size,omitempty"`
+	Cursor   string   `json:"cursor,omitempty"`
+	SearchID string   `json:"search_id,omitempty"`
+	Names    []string `json:"-"` // Optional repeated names; use Name for one string.
+	Folders  []string `json:"-"`
+	Kinds    []string `json:"-"`
+	Exts     []string `json:"-"`
+	// Optional limits preserve explicit zero values, such as empty files only.
+	SizeMinValue *int `json:"-"`
+	SizeMaxValue *int `json:"-"`
+}
+
+func (r V2FileMetadataSearchRequest) MarshalJSON() ([]byte, error) {
+	type requestAlias V2FileMetadataSearchRequest
+	data, err := json.Marshal(requestAlias(r))
+	if err != nil {
+		return nil, err
+	}
+	var payload map[string]interface{}
+	if err := json.Unmarshal(data, &payload); err != nil {
+		return nil, err
+	}
+	for key, values := range map[string][]string{"name": appendSingle(r.Name, r.Names), "folder": appendSingle(r.Folder, r.Folders), "kind": appendSingle(r.Kind, r.Kinds), "ext": appendSingle(r.Ext, r.Exts)} {
+		if len(values) > 1 {
+			payload[key] = values
+		} else if len(values) == 1 {
+			payload[key] = values[0]
+		}
+	}
+	if r.SizeMinValue != nil {
+		payload["size_min"] = *r.SizeMinValue
+	}
+	if r.SizeMaxValue != nil {
+		payload["size_max"] = *r.SizeMaxValue
+	}
+	return json.Marshal(payload)
 }
 
 // FileMetadataSearchOptions contains query options for GET /service/v2/files/search.
@@ -155,7 +188,12 @@ func (s *VictimsService) Search(query string, opts *VictimsSearchOptions) (*V2Vi
 	if victimsSearchNeedsBody(opts) {
 		return s.searchPostFromOptions(query, opts)
 	}
+	return s.SearchGet(query, opts)
+}
 
+// SearchGet explicitly uses GET, including structured filters encoded in the query.
+// Search keeps its existing automatic POST behavior for structured filters.
+func (s *VictimsService) SearchGet(query string, opts *VictimsSearchOptions) (*V2VictimsResponse, error) {
 	params, err := buildVictimsV2SearchParams(query, opts, true)
 	if err != nil {
 		return nil, err
@@ -261,7 +299,7 @@ func (s *VictimsService) SearchFilesMetadataV2Post(body *V2FileMetadataSearchReq
 
 // SearchVictimProperties searches sanitized victim properties globally.
 func (s *VictimsService) SearchVictimProperties(opts *VictimPropertiesSearchOptions) (*V2VictimPropertiesSearchResponse, error) {
-	params := buildVictimPropertiesSearchParams(opts, false)
+	params := buildVictimPropertiesSearchParams(opts, true)
 
 	var resp V2VictimPropertiesSearchResponse
 	err := s.client.get(victimPropertiesV2SearchPath, params, &resp)
@@ -368,9 +406,16 @@ func (s *VictimsService) GetVictimManifestV2(logID string, opts ...*VictimRawOpt
 	return s.GetManifest(logID, opts...)
 }
 
-// GetFile gets victim file content.
+// GetFile returns response bytes for one victim file. Limited access may return
+// JSON preview bytes; use GetFileResponse to inspect the content headers first.
 func (s *VictimsService) GetFile(logID, fileID string, opts ...*VictimRawOptions) ([]byte, error) {
 	return s.client.getRaw(victimRawPath(logID, "/files/"+url.PathEscape(fileID), opts...))
+}
+
+// GetFileResponse gets file content plus Content-Type and other response
+// headers. Access-limited file requests can return a JSON preview with HTTP 200.
+func (s *VictimsService) GetFileResponse(logID, fileID string, opts ...*VictimRawOptions) (*DownloadResponse, error) {
+	return s.client.getRawResponse(victimRawPath(logID, "/files/"+url.PathEscape(fileID), opts...), nil)
 }
 
 // GetVictimFileV2 is an operation-id alias for GetFile.
@@ -381,6 +426,11 @@ func (s *VictimsService) GetVictimFileV2(logID, fileID string, opts ...*VictimRa
 // DownloadArchiveBytes downloads victim archive bytes.
 func (s *VictimsService) DownloadArchiveBytes(logID string, opts ...*VictimRawOptions) ([]byte, error) {
 	return s.client.getRaw(victimRawPath(logID, "/archive", opts...))
+}
+
+// DownloadArchiveResponse downloads a victim archive and retains its headers.
+func (s *VictimsService) DownloadArchiveResponse(logID string, opts ...*VictimRawOptions) (*DownloadResponse, error) {
+	return s.client.getRawResponse(victimRawPath(logID, "/archive", opts...), nil)
 }
 
 // DownloadArchive downloads victim archive as ZIP.
@@ -423,26 +473,26 @@ func buildVictimsV2SearchParams(query string, opts *VictimsSearchOptions, includ
 	addIntParam(params, "total_docs_max", opts.TotalDocsMax)
 	addIntParam(params, "service_count_min", opts.ServiceCountMin)
 	addIntParam(params, "service_count_max", opts.ServiceCountMax)
-	addSingleAndRepeatedParam(params, "email[]", opts.Email, opts.Emails)
-	addRepeatedParam(params, "email_domain[]", opts.EmailDomains)
-	addSingleAndRepeatedParam(params, "ip[]", opts.IP, opts.IPs)
-	addRepeatedParam(params, "hwid[]", opts.HWIDs)
-	addSingleAndRepeatedParam(params, "discord_id[]", opts.DiscordID, opts.DiscordIDs)
-	addSingleAndRepeatedParam(params, "username[]", opts.ComputerName, appendSingle(opts.Username, opts.Usernames))
-	addSingleAndRepeatedParam(params, "country[]", opts.Country, opts.Countries)
-	addSingleAndRepeatedParam(params, "city[]", opts.City, opts.Cities)
-	addSingleAndRepeatedParam(params, "os[]", opts.OS, opts.OSes)
-	addRepeatedParam(params, "service[]", opts.Services)
-	addRepeatedParam(params, "steam_id[]", opts.SteamIDs)
-	addRepeatedParam(params, "steam_name[]", opts.SteamNames)
-	addRepeatedParam(params, "phone[]", opts.Phones)
-	addRepeatedParam(params, "domain[]", opts.Domains)
-	addRepeatedParam(params, "subdomain[]", opts.Subdomains)
-	addRepeatedParam(params, "identity_state[]", opts.IdentityStates)
-	addRepeatedParam(params, "victim_ip[]", opts.VictimIPs)
-	addRepeatedParam(params, "antivirus[]", opts.Antivirus)
-	addRepeatedParam(params, "infection_path[]", opts.InfectionPaths)
-	addRepeatedParam(params, "fields[]", opts.Fields)
+	addSingleAndRepeatedParam(params, "email", opts.Email, opts.Emails)
+	addRepeatedParam(params, "email_domain", opts.EmailDomains)
+	addSingleAndRepeatedParam(params, "ip", opts.IP, opts.IPs)
+	addRepeatedParam(params, "hwid", opts.HWIDs)
+	addSingleAndRepeatedParam(params, "discord_id", opts.DiscordID, opts.DiscordIDs)
+	addSingleAndRepeatedParam(params, "username", opts.ComputerName, appendSingle(opts.Username, opts.Usernames))
+	addSingleAndRepeatedParam(params, "country", opts.Country, opts.Countries)
+	addSingleAndRepeatedParam(params, "city", opts.City, opts.Cities)
+	addSingleAndRepeatedParam(params, "os", opts.OS, opts.OSes)
+	addRepeatedParam(params, "service", opts.Services)
+	addRepeatedParam(params, "steam_id", opts.SteamIDs)
+	addRepeatedParam(params, "steam_name", opts.SteamNames)
+	addRepeatedParam(params, "phone", opts.Phones)
+	addRepeatedParam(params, "domain", opts.Domains)
+	addRepeatedParam(params, "subdomain", opts.Subdomains)
+	addRepeatedParam(params, "identity_state", opts.IdentityStates)
+	addRepeatedParam(params, "victim_ip", opts.VictimIPs)
+	addRepeatedParam(params, "antivirus", opts.Antivirus)
+	addRepeatedParam(params, "infection_path", opts.InfectionPaths)
+	addRepeatedParam(params, "fields", opts.Fields)
 	addStringParam(params, "view", opts.View)
 	addStringParam(params, "search_id", opts.SearchID)
 
@@ -503,12 +553,18 @@ func buildFileMetadataSearchParams(opts *FileMetadataSearchOptions) url.Values {
 
 	addStringParam(params, "q", opts.Query)
 	addStringParam(params, "log_id", opts.LogID)
-	addStringParam(params, "name", opts.Name)
-	addStringParam(params, "folder", opts.Folder)
-	addStringParam(params, "kind", opts.Kind)
-	addStringParam(params, "ext", opts.Ext)
+	addSingleAndRepeatedParam(params, "name", opts.Name, opts.Names)
+	addSingleAndRepeatedParam(params, "folder", opts.Folder, opts.Folders)
+	addSingleAndRepeatedParam(params, "kind", opts.Kind, opts.Kinds)
+	addSingleAndRepeatedParam(params, "ext", opts.Ext, opts.Exts)
 	addIntParam(params, "size_min", opts.SizeMin)
 	addIntParam(params, "size_max", opts.SizeMax)
+	if opts.SizeMinValue != nil {
+		params.Set("size_min", strconv.Itoa(*opts.SizeMinValue))
+	}
+	if opts.SizeMaxValue != nil {
+		params.Set("size_max", strconv.Itoa(*opts.SizeMaxValue))
+	}
 	addIntParam(params, "page_size", opts.PageSize)
 	addStringParam(params, "cursor", opts.Cursor)
 	addStringParam(params, "search_id", opts.SearchID)
@@ -535,6 +591,7 @@ func buildVictimPropertiesSearchParams(opts *VictimPropertiesSearchOptions, incl
 	addStringParam(params, "domain", opts.Domain)
 	addBoolPtrParam(params, "active", opts.Active)
 	addStringParam(params, "source_type", opts.SourceType)
+	addStringParam(params, "source_file_id", opts.SourceFileID)
 	addStringOrStringSliceParam(params, "confidence", opts.Confidence)
 	addFloatPtrParam(params, "confidence_min", opts.ConfidenceMin)
 	addBoolPtrParam(params, "include_cookie_evidence", opts.IncludeCookieEvidence)

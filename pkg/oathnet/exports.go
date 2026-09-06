@@ -1,7 +1,6 @@
 package oathnet
 
 import (
-	"encoding/json"
 	"fmt"
 	"net/url"
 	"os"
@@ -59,17 +58,11 @@ func (s *ExportsService) Create(exportType string, opts *ExportCreateOptions) (*
 		return nil, err
 	}
 
-	resp := &ExportJobResponse{Success: true}
-	if _, ok := rawResp["success"]; ok {
-		jsonData, _ := json.Marshal(rawResp)
-		json.Unmarshal(jsonData, resp)
-	} else {
-		jsonData, _ := json.Marshal(rawResp)
-		resp.Data = &ExportJobData{}
-		json.Unmarshal(jsonData, resp.Data)
+	success, message, data, err := decodeJobPayload[ExportJobData](rawResp)
+	if err != nil {
+		return nil, err
 	}
-
-	return resp, nil
+	return &ExportJobResponse{Success: success, Message: message, Data: data}, nil
 }
 
 // CreateExportV2 is an operation-id alias for Create.
@@ -85,17 +78,11 @@ func (s *ExportsService) GetStatus(jobID string) (*ExportJobResponse, error) {
 		return nil, err
 	}
 
-	resp := &ExportJobResponse{Success: true}
-	if _, ok := rawResp["success"]; ok {
-		jsonData, _ := json.Marshal(rawResp)
-		json.Unmarshal(jsonData, resp)
-	} else {
-		jsonData, _ := json.Marshal(rawResp)
-		resp.Data = &ExportJobData{}
-		json.Unmarshal(jsonData, resp.Data)
+	success, message, data, err := decodeJobPayload[ExportJobData](rawResp)
+	if err != nil {
+		return nil, err
 	}
-
-	return resp, nil
+	return &ExportJobResponse{Success: success, Message: message, Data: data}, nil
 }
 
 // GetExportV2 is an operation-id alias for GetStatus.
@@ -129,6 +116,11 @@ func (s *ExportsService) DownloadBytes(jobID string) ([]byte, error) {
 	return data, nil
 }
 
+// DownloadResponse downloads a completed export with its content headers.
+func (s *ExportsService) DownloadResponse(jobID string) (*DownloadResponse, error) {
+	return s.client.getRawResponse(exportJobPath(jobID, "/download"), nil)
+}
+
 // Download downloads the export file.
 func (s *ExportsService) Download(jobID, outputPath string) error {
 	data, err := s.DownloadBytes(jobID)
@@ -145,35 +137,16 @@ func (s *ExportsService) DownloadExportV2(jobID string) ([]byte, error) {
 
 // WaitForCompletion waits for an export job to complete.
 func (s *ExportsService) WaitForCompletion(jobID string, pollInterval, timeout time.Duration) (*ExportJobResponse, error) {
-	startTime := time.Now()
-
-	for {
-		resp, err := s.GetStatus(jobID)
+	return pollJob(s.client, jobID, pollInterval, timeout, func(client *Client) (*ExportJobResponse, bool, string, string, int, error) {
+		resp, err := client.Exports.GetStatus(jobID)
 		if err != nil {
-			return nil, err
+			return nil, false, "", "", 0, err
 		}
-
-		if resp.Data != nil {
-			status := resp.Data.Status
-			if status == "completed" || status == "canceled" {
-				return resp, nil
-			}
+		if resp.Data == nil {
+			return resp, false, "", resp.Message, 0, nil
 		}
-
-		elapsed := time.Since(startTime)
-		if elapsed >= timeout {
-			return nil, fmt.Errorf("export job %s did not complete within %v", jobID, timeout)
-		}
-
-		sleepTime := pollInterval
-		if resp.Data != nil && resp.Data.NextPollAfterMs > 0 {
-			suggested := time.Duration(resp.Data.NextPollAfterMs) * time.Millisecond
-			if suggested < sleepTime {
-				sleepTime = suggested
-			}
-		}
-		time.Sleep(sleepTime)
-	}
+		return resp, resp.Success, resp.Data.Status, resp.Data.LastError, resp.Data.NextPollAfterMs, nil
+	})
 }
 
 // Export creates an export, waits for completion, and downloads.

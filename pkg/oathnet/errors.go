@@ -9,7 +9,10 @@ import (
 type OathNetError struct {
 	Message    string
 	StatusCode int
+	Code       string
 	Details    map[string]interface{}
+	Response   map[string]interface{}
+	RetryAfter string
 }
 
 func (e *OathNetError) Error() string {
@@ -21,7 +24,12 @@ func (e *OathNetError) Error() string {
 
 // AuthenticationError is returned for authentication failures.
 type AuthenticationError struct {
-	Message string
+	Message    string
+	StatusCode int
+	Code       string
+	Details    map[string]interface{}
+	Response   map[string]interface{}
+	RetryAfter string
 }
 
 func (e *AuthenticationError) Error() string {
@@ -30,8 +38,12 @@ func (e *AuthenticationError) Error() string {
 
 // ValidationError is returned for validation failures.
 type ValidationError struct {
-	Message string
-	Details map[string]interface{}
+	Message    string
+	Details    map[string]interface{}
+	StatusCode int
+	Code       string
+	Response   map[string]interface{}
+	RetryAfter string
 }
 
 func (e *ValidationError) Error() string {
@@ -43,7 +55,12 @@ func (e *ValidationError) Error() string {
 
 // NotFoundError is returned when a resource is not found.
 type NotFoundError struct {
-	Message string
+	Message    string
+	StatusCode int
+	Code       string
+	Details    map[string]interface{}
+	Response   map[string]interface{}
+	RetryAfter string
 }
 
 func (e *NotFoundError) Error() string {
@@ -52,7 +69,12 @@ func (e *NotFoundError) Error() string {
 
 // RateLimitError is returned when rate limited.
 type RateLimitError struct {
-	Message string
+	Message    string
+	StatusCode int
+	Code       string
+	Details    map[string]interface{}
+	Response   map[string]interface{}
+	RetryAfter string
 }
 
 func (e *RateLimitError) Error() string {
@@ -61,7 +83,12 @@ func (e *RateLimitError) Error() string {
 
 // QuotaExceededError is returned when quota is exceeded.
 type QuotaExceededError struct {
-	Message string
+	Message    string
+	StatusCode int
+	Code       string
+	Details    map[string]interface{}
+	Response   map[string]interface{}
+	RetryAfter string
 }
 
 func (e *QuotaExceededError) Error() string {

@@ -67,16 +67,20 @@ type BreachV2SearchOptions struct {
 
 // BreachV2AutocompleteOptions contains options for value autocomplete.
 type BreachV2AutocompleteOptions struct {
-	Field       string
-	Query       string
-	Limit       int
+	// Supported values: dbname, email_domain, country, city, state, postal_code, language, gender.
+	// Omit Field to search across those values. Email addresses are not preloaded.
+	Field string
+	Query string
+	Limit int
+	// Deprecated: source descriptions are available only through AutocompleteDBNames.
 	IncludeInfo bool
 }
 
 // BreachV2AutocompleteDBNamesOptions contains options for DB-name autocomplete.
 type BreachV2AutocompleteDBNamesOptions struct {
-	Query string
-	Limit int
+	Query       string
+	Limit       int
+	IncludeInfo *bool // Nil uses the server default; false omits source descriptions.
 }
 
 // BreachV2AutocompleteFieldsOptions contains options for field coverage lookup.
@@ -90,7 +94,12 @@ func (s *BreachV2Service) Search(query string, opts *BreachV2SearchOptions) (*V2
 	if breachSearchNeedsBody(opts) {
 		return s.searchPostFromOptions(query, opts)
 	}
+	return s.SearchGet(query, opts)
+}
 
+// SearchGet explicitly uses GET, including structured filters encoded in the query.
+// Search keeps its existing automatic POST behavior for structured filters.
+func (s *BreachV2Service) SearchGet(query string, opts *BreachV2SearchOptions) (*V2BreachSearchResponse, error) {
 	params, err := buildBreachV2SearchParams(query, opts, true)
 	if err != nil {
 		return nil, err
@@ -153,7 +162,6 @@ func (s *BreachV2Service) Autocomplete(opts *BreachV2AutocompleteOptions) (*V2Au
 		addStringParam(params, "field", opts.Field)
 		addStringParam(params, "q", opts.Query)
 		addIntParam(params, "limit", opts.Limit)
-		addBoolParam(params, "include_info", opts.IncludeInfo)
 	}
 
 	var resp V2AutocompleteValueResponse
@@ -167,6 +175,7 @@ func (s *BreachV2Service) AutocompleteDBNames(opts *BreachV2AutocompleteDBNamesO
 	if opts != nil {
 		addStringParam(params, "q", opts.Query)
 		addIntParam(params, "limit", opts.Limit)
+		addBoolPtrParam(params, "include_info", opts.IncludeInfo)
 	}
 
 	var resp V2AutocompleteDBNamesResponse
@@ -209,35 +218,35 @@ func buildBreachV2SearchParams(query string, opts *BreachV2SearchOptions, includ
 		addStringParam(params, "filter_id", opts.FilterID)
 	}
 
-	addRepeatedParam(params, "email[]", opts.Email)
-	addRepeatedParam(params, "email_domain[]", opts.EmailDomains)
-	addRepeatedParam(params, "domain[]", opts.Domains)
-	addRepeatedParam(params, "username[]", opts.Usernames)
-	addRepeatedParam(params, "password[]", opts.Passwords)
-	addRepeatedParam(params, "password_hash[]", opts.PasswordHashes)
-	addRepeatedParam(params, "ip[]", opts.IPs)
-	addRepeatedParam(params, "phone[]", opts.Phones)
-	addRepeatedParam(params, "first_name[]", opts.FirstNames)
-	addRepeatedParam(params, "last_name[]", opts.LastNames)
-	addRepeatedParam(params, "full_name[]", opts.FullNames)
-	addRepeatedParam(params, "city[]", opts.Cities)
-	addRepeatedParam(params, "country[]", opts.Countries)
-	addRepeatedParam(params, "state[]", opts.States)
-	addRepeatedParam(params, "postal_code[]", opts.PostalCodes)
-	addRepeatedParam(params, "dbname[]", opts.DBNames)
-	addRepeatedParam(params, "discord_id[]", opts.DiscordIDs)
-	addRepeatedParam(params, "iban[]", opts.IBANs)
-	addRepeatedParam(params, "ssn[]", opts.SSNs)
+	addRepeatedParam(params, "email", opts.Email)
+	addRepeatedParam(params, "email_domain", opts.EmailDomains)
+	addRepeatedParam(params, "domain", opts.Domains)
+	addRepeatedParam(params, "username", opts.Usernames)
+	addRepeatedParam(params, "password", opts.Passwords)
+	addRepeatedParam(params, "password_hash", opts.PasswordHashes)
+	addRepeatedParam(params, "ip", opts.IPs)
+	addRepeatedParam(params, "phone", opts.Phones)
+	addRepeatedParam(params, "first_name", opts.FirstNames)
+	addRepeatedParam(params, "last_name", opts.LastNames)
+	addRepeatedParam(params, "full_name", opts.FullNames)
+	addRepeatedParam(params, "city", opts.Cities)
+	addRepeatedParam(params, "country", opts.Countries)
+	addRepeatedParam(params, "state", opts.States)
+	addRepeatedParam(params, "postal_code", opts.PostalCodes)
+	addRepeatedParam(params, "dbname", opts.DBNames)
+	addRepeatedParam(params, "discord_id", opts.DiscordIDs)
+	addRepeatedParam(params, "iban", opts.IBANs)
+	addRepeatedParam(params, "ssn", opts.SSNs)
 	addStringParam(params, "date_birth_from", opts.DateBirthFrom)
 	addStringParam(params, "date_birth_to", opts.DateBirthTo)
-	addRepeatedParam(params, "name[]", opts.Names)
-	addRepeatedParam(params, "gender[]", opts.Genders)
-	addRepeatedParam(params, "address[]", opts.Addresses)
-	addRepeatedParam(params, "discord[]", opts.Discord)
-	addRepeatedParam(params, "social[]", opts.Social)
-	addRepeatedParam(params, "financial[]", opts.Financial)
-	addRepeatedParam(params, "gaming[]", opts.Gaming)
-	addRepeatedParam(params, "fields[]", opts.Fields)
+	addRepeatedParam(params, "name", opts.Names)
+	addRepeatedParam(params, "gender", opts.Genders)
+	addRepeatedParam(params, "address", opts.Addresses)
+	addRepeatedParam(params, "discord", opts.Discord)
+	addRepeatedParam(params, "social", opts.Social)
+	addRepeatedParam(params, "financial", opts.Financial)
+	addRepeatedParam(params, "gaming", opts.Gaming)
+	addRepeatedParam(params, "fields", opts.Fields)
 	addStringParam(params, "search_id", opts.SearchID)
 
 	for key, values := range opts.ExtraQuery {

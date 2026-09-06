@@ -157,7 +157,14 @@ func TestExportsService_WaitForCompletion(t *testing.T) {
 }
 
 func TestExportsService_Download(t *testing.T) {
-	t.Skip("Skipping: Export download API has known issues (500 error)")
+	client := responseTestClient(t, "email,dbname\nuser@example.com,example-source\n")
+	data, err := client.Exports.DownloadBytes("fixture-job")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(data) != "email,dbname\nuser@example.com,example-source\n" {
+		t.Fatalf("download bytes changed: %q", data)
+	}
 }
 
 func TestExportsService_OpenAPIRequestConstruction(t *testing.T) {

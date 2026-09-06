@@ -55,7 +55,25 @@ func TestStealerV2Service_Search(t *testing.T) {
 	})
 
 	t.Run("cursor pagination", func(t *testing.T) {
-		t.Skip("Skipping: V2 stealer cursor pagination has known issues")
+		opts := &StealerSearchOptions{PageSize: 1}
+		first, err := client.Stealer.Search(TestStealerQuery, opts)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !first.Success || first.Data == nil || first.Data.NextCursor == "" {
+			t.Fatal("live fixture must provide at least two records and a next cursor")
+		}
+		opts.Cursor = first.Data.NextCursor
+		second, err := client.Stealer.Search(TestStealerQuery, opts)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !second.Success || second.Data == nil || len(second.Data.Items) == 0 {
+			t.Fatal("cursor request did not return the next fixture page")
+		}
+		if first.Data.Items[0].ID == second.Data.Items[0].ID {
+			t.Fatal("cursor repeated the first record")
+		}
 	})
 
 	t.Run("wildcard search", func(t *testing.T) {
@@ -155,33 +173,33 @@ func TestStealerV2Service_SearchRequestConstruction(t *testing.T) {
 	}
 
 	wantQuery := url.Values{
-		"cursor":                    {"cursor/with space"},
-		"page_size":                 {"50"},
-		"sort":                      {"-indexed_at"},
-		"from":                      {"2026-01-01T00:00:00Z"},
-		"to":                        {"2026-01-31T00:00:00Z"},
-		"date_field":                {"indexed_at"},
-		"log_id":                    {"log-123"},
-		"has_log_id":                {"true"},
-		"wildcard":                  {"true"},
-		"logic":                     {"and"},
-		"domain[]":                  {"example.com"},
-		"subdomain[]":               {"accounts.example.com"},
-		"username[]":                {"alice"},
-		"password[]":                {"secret"},
-		"password_hash[]":           {"sha256:value"},
-		"path[]":                    {"/Users/Alice/AppData"},
-		"email[]":                   {"alice@example.com"},
-		"email_domain[]":            {"example.com"},
-		"ip[]":                      {"203.0.113.10"},
-		"hwid[]":                    {"hwid-1"},
-		"discord_id[]":              {"1234567890"},
-		"source_type[]":             {"stealer"},
-		"archive_hash[]":            {"archive-hash"},
-		"canonical_credential_id[]": {"cred-1"},
-		"fields[]":                  {"url_str", "domain"},
-		"search_id":                 {"session-123"},
-		"view":                      {"enriched"},
+		"cursor":                  {"cursor/with space"},
+		"page_size":               {"50"},
+		"sort":                    {"-indexed_at"},
+		"from":                    {"2026-01-01T00:00:00Z"},
+		"to":                      {"2026-01-31T00:00:00Z"},
+		"date_field":              {"indexed_at"},
+		"log_id":                  {"log-123"},
+		"has_log_id":              {"true"},
+		"wildcard":                {"true"},
+		"logic":                   {"and"},
+		"domain":                  {"example.com"},
+		"subdomain":               {"accounts.example.com"},
+		"username":                {"alice"},
+		"password":                {"secret"},
+		"password_hash":           {"sha256:value"},
+		"path":                    {"/Users/Alice/AppData"},
+		"email":                   {"alice@example.com"},
+		"email_domain":            {"example.com"},
+		"ip":                      {"203.0.113.10"},
+		"hwid":                    {"hwid-1"},
+		"discord_id":              {"1234567890"},
+		"source_type":             {"stealer"},
+		"archive_hash":            {"archive-hash"},
+		"canonical_credential_id": {"cred-1"},
+		"fields":                  {"url_str", "domain"},
+		"search_id":               {"session-123"},
+		"view":                    {"enriched"},
 	}
 	if gotPath != "/service/v2/stealer/search" {
 		t.Fatalf("path = %s, want /service/v2/stealer/search", gotPath)

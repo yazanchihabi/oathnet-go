@@ -1,424 +1,146 @@
 # OathNet Go SDK
 
-Official Go SDK and CLI for the OathNet API.
+Use the Go client for OathNet searches, investigations, public-account enrichment, exports, bulk jobs, and monitors. Go 1.21 or later is required. The repository also contains a smaller command-line client.
 
-## Installation
+## Install
 
 ```bash
 go get github.com/oathnet/oathnet-go
+export OATHNET_API_KEY="YOUR_API_KEY"
 ```
 
-Or clone and build from source:
+Keep your key in the environment or a secret manager. See [authentication](https://docs.oathnet.org/introduction/authentication) for creating a key.
 
-```bash
-git clone https://github.com/oathnet/oathnet-go
-cd oathnet-go
-go build -o oathnet ./cmd/oathnet
-```
-
-## Quick Start
-
-### SDK Usage
+## Make a search
 
 ```go
 package main
 
 import (
+    "context"
     "fmt"
     "log"
+    "os"
+    "time"
 
     "github.com/oathnet/oathnet-go/pkg/oathnet"
 )
 
 func main() {
-    client, err := oathnet.NewClient("your-api-key")
-    if err != nil {
-        log.Fatal(err)
-    }
+    client, err := oathnet.NewClient(os.Getenv("OATHNET_API_KEY"))
+    if err != nil { log.Fatal(err) }
 
-    // Search breach database
-    result, err := client.Search.Breach("winterfox", nil)
-    if err != nil {
-        log.Fatal(err)
-    }
-    fmt.Printf("Found %d results\n", result.Data.ResultsFound)
+    ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+    defer cancel()
+    response, err := client.WithContext(ctx).Breach.Search("user@example.com", &oathnet.BreachV2SearchOptions{
+        PageSize: 25,
+        Fields: []string{"email", "dbname"},
+    })
+    if err != nil { log.Fatal(err) }
+    if !response.Success || response.Data == nil { log.Fatal("search returned no successful data") }
 
-    // Get IP info
-    ipInfo, err := client.OSINT.IPInfo("174.235.65.156")
-    if err != nil {
-        log.Fatal(err)
-    }
-    fmt.Printf("Country: %s, City: %s\n", ipInfo.Data.Country, ipInfo.Data.City)
-
-    // Discord lookup
-    discord, err := client.OSINT.DiscordUserinfo("300760994454437890")
-    if err != nil {
-        log.Fatal(err)
-    }
-    fmt.Printf("Username: %s\n", discord.Data.Username)
-}
-```
-
-### CLI Usage
-
-```bash
-# Build the CLI
-go build -o oathnet ./cmd/oathnet
-
-# Set API key
-export OATHNET_API_KEY=your-api-key
-
-# Search breach database
-./oathnet search breach -q "winterfox"
-
-# Get IP info
-./oathnet osint ip 174.235.65.156
-
-# Discord lookup
-./oathnet osint discord user 300760994454437890
-
-# Export to JSON
-./oathnet search breach -q "winterfox" -f json
-```
-
-## Features
-
-### Search Services
-- **Breach Search**: Search leaked credentials across 50B+ records
-- **Stealer Search**: Search stealer log databases
-- **Search Sessions**: Optimize quota with grouped lookups
-
-### V2 Services
-- **V2 Stealer**: Enhanced stealer search with filtering
-- **V2 Victims**: Search victim profiles with device info
-- **V2 File Search**: Regex search within victim files
-- **V2 Exports**: Export results to CSV/JSONL
-- **V2 AI Filters**: Translate natural language into reusable structured filters
-
-### OSINT Lookups
-- Discord (user info and username history)
-- Steam profiles
-- Xbox Live profiles
-- Roblox user info
-- IP geolocation
-- Email existence (Holehe)
-- Google accounts (GHunt)
-- Subdomain extraction
-- Minecraft username history
-
-## SDK Reference
-
-### Client
-
-```go
-import "github.com/oathnet/oathnet-go/pkg/oathnet"
-
-// Create client with default options
-client, err := oathnet.NewClient("your-api-key")
-
-// Create client with custom options
-client, err := oathnet.NewClient("your-api-key",
-    oathnet.WithBaseURL("https://oathnet.org/api"),
-    oathnet.WithTimeout(60 * time.Second),
-)
-```
-
-### Services
-
-#### Search
-
-```go
-// Initialize search session
-session, err := client.Search.InitSession("query")
-
-// Search breach database
-result, err := client.Search.Breach("query", &oathnet.SearchOptions{
-    DBNames: "linkedin",  // Optional database filter
-})
-
-// Search stealer database
-result, err := client.Search.Stealer("query", nil)
-```
-
-#### OSINT
-
-```go
-// IP lookup
-ipInfo, err := client.OSINT.IPInfo("8.8.8.8")
-
-// Steam profile
-steam, err := client.OSINT.Steam("steam_id")
-
-// Xbox profile
-xbox, err := client.OSINT.Xbox("gamertag")
-
-// Discord user
-discord, err := client.OSINT.DiscordUserinfo("discord_id")
-
-// Discord username history
-history, err := client.OSINT.DiscordUsernameHistory("discord_id")
-
-// Roblox user (by username)
-robloxUser, err := client.OSINT.RobloxUserinfo(oathnet.RobloxUserinfoOptions{
-    Username: "username",
-})
-
-// Holehe email check
-holehe, err := client.OSINT.Holehe("email@example.com")
-
-// Minecraft username history
-minecraft, err := client.OSINT.MinecraftHistory("username")
-
-// Subdomain extraction
-subdomains, err := client.OSINT.ExtractSubdomain("example.com", nil)
-
-// Optional search session ID
-ipInfo, err := client.OSINT.IPInfo("8.8.8.8", oathnet.OSINTOptions{
-    SearchID: "search_id",
-})
-```
-
-#### V2 Stealer
-
-```go
-// Enhanced search with filters
-result, err := client.Stealer.Search("query", &oathnet.StealerSearchOptions{
-    Domain:   "facebook.com",
-    HasLogID: true,
-    Wildcard: true,
-    PageSize: 25,
-    Cursor:   "next_page_cursor",
-})
-
-// Extract subdomains from stealer data
-subs, err := client.Stealer.Subdomain("example.com", "")
-```
-
-#### V2 AI Filters
-
-```go
-// Create a structured filter from natural language
-filter, err := client.AI.Create(oathnet.V2AIFilterRequest{
-    Query: "French users over 30",
-    Index: oathnet.AIFilterIndexBreach,
-})
-
-// Fetch the transient filter context
-context, err := client.AI.GetContext(filter.FilterID)
-```
-
-#### V2 Victims
-
-```go
-// Search victim profiles
-result, err := client.Victims.Search("query", &oathnet.VictimsSearchOptions{
-    Email:    "user@gmail.com",
-    PageSize: 25,
-})
-
-// Get file manifest
-manifest, err := client.Victims.GetManifest("log_id")
-
-// Download file
-content, err := client.Victims.GetFile("log_id", "file_id")
-
-// Download archive
-err := client.Victims.DownloadArchive("log_id", "output.zip")
-```
-
-#### File Search (Async)
-
-```go
-// Create search job
-job, err := client.FileSearch.Create("password", &oathnet.FileSearchCreateOptions{
-    SearchMode: "regex",  // "literal", "regex", "wildcard"
-    MaxMatches: 100,
-})
-
-// Wait for results
-result, err := client.FileSearch.WaitForCompletion(
-    job.Data.JobID,
-    2*time.Second,  // poll interval
-    60*time.Second, // timeout
-)
-
-// Or use convenience method
-result, err := client.FileSearch.Search("password", &oathnet.FileSearchCreateOptions{
-    SearchMode: "literal",
-    MaxMatches: 50,
-}, 60*time.Second)
-```
-
-#### Exports (Async)
-
-```go
-// Create export
-job, err := client.Exports.Create("breach", &oathnet.ExportCreateOptions{
-    Service: "breach",
-    Format: "jsonl",
-    Limit:  1000,
-    Fields: []string{"email", "domain"},
-    Search: map[string]interface{}{"q": "example.com"},
-})
-
-// Wait for completion
-result, err := client.Exports.WaitForCompletion(
-    job.Data.JobID,
-    time.Second,
-    120*time.Second,
-)
-
-// Download as bytes
-data, err := client.Exports.DownloadBytes(job.Data.JobID)
-
-// Or download to file
-err := client.Exports.Download(job.Data.JobID, "export.csv")
-```
-
-### Error Handling
-
-```go
-import "github.com/oathnet/oathnet-go/pkg/oathnet"
-
-result, err := client.Search.Breach("query", nil)
-if err != nil {
-    switch e := err.(type) {
-    case *oathnet.AuthenticationError:
-        log.Printf("Invalid API key: %v", e)
-    case *oathnet.ValidationError:
-        log.Printf("Invalid parameters: %v", e)
-    case *oathnet.NotFoundError:
-        log.Printf("Resource not found: %v", e)
-    case *oathnet.RateLimitError:
-        log.Printf("Rate limited: %v", e)
-    case *oathnet.OathNetError:
-        log.Printf("API error: %v", e)
-    default:
-        log.Printf("Unknown error: %v", err)
+    fmt.Printf("Received %d records\n", len(response.Data.Items))
+    for _, item := range response.Data.Items {
+        fmt.Printf("email=%s source=%s\n", item.Raw["email"], item.Raw["dbname"])
     }
 }
 ```
 
-## CLI Reference
+`Raw` preserves the source document's JSON values, including arrays, objects, nulls, numbers, and custom fields. Existing scalar convenience fields such as `Email` are populated when that source value is a string. Use `Raw` for integrations that need every source shape.
+
+For another page, copy `response.Data.NextCursor` into the same options' `Cursor`. Keep the query, filters, selected fields, page size, and sort unchanged. Stop when the returned cursor is empty. A total with `Meta.TotalRelation == "gte"` is a lower bound. See [pagination](https://docs.oathnet.org/guides/pagination).
+
+## Select a workflow
+
+The SDK has methods for every operation in the public OpenAPI document. Aliases ending in `V2` call the same operation as their shorter method names.
+
+| Workflow | Methods | Guide |
+| --- | --- | --- |
+| Search session | `Search.InitSession` | [Sessions](https://docs.oathnet.org/guides/search-sessions) |
+| Data Breaches | `Breach.Search`, `SearchPost`, `Autocomplete`, `AutocompleteDBNames`, `AutocompleteFields` | [Breach search](https://docs.oathnet.org/guides/breach-search) |
+| Stealer | `Stealer.Search`, `SearchPost`, `Subdomain`, `GetPhonebook` | [Stealer](https://docs.oathnet.org/guides/stealer-search) |
+| Connected records | `Stealer.InvestigationSearch`, `InvestigationSearchPost` | [Investigations](https://docs.oathnet.org/guides/investigations) |
+| Victims | `Victims.Search`, `SearchPost`, `GetSummary`, `SearchVictimProperties`, `SearchVictimPropertiesPost`, `GetProperties` | [Victims](https://docs.oathnet.org/guides/victims) |
+| Cookies | `Victims.GetCookies`, `InspectCookieDomain` | [Victim reference](https://docs.oathnet.org/api-reference/getVictimCookiesV2) |
+| Files and archives | `Victims.SearchFilesMetadata`, `SearchFilesMetadataPost`, `GetManifest`, `GetFile`, `GetFileResponse`, `DownloadArchiveBytes` | [Files](https://docs.oathnet.org/guides/file-search) |
+| Search file content | `FileSearch.Create`, `GetStatus`, `WaitForCompletion` | [File search](https://docs.oathnet.org/guides/file-search) |
+| Export one search | `Exports.Create`, `List`, `GetStatus`, `DownloadBytes`, `WaitForCompletion` | [Exports](https://docs.oathnet.org/guides/exports) |
+| Search several terms | `Bulk.Create`, `List`, `GetStatus`, `DownloadBytes`, `WaitForCompletion` | [Bulk search](https://docs.oathnet.org/guides/bulk-search) |
+| Monitor management | `Scanners.GetQuota`, `List`, `Create`, `Get`, `Update`, `Delete`, `Pause`, `Resume`, `Trigger`, `ListRuns`, `GetRun` | [Monitors](https://docs.oathnet.org/guides/scanners) |
+| Monitor delivery | `Scanners.TestDraftDelivery`, `TestNotification`, `GetWebhookSecurity`, `RotateWebhookSecret`, `ListDestinations`, `CreateDestination`, `DeleteDestination` | [Webhooks](https://docs.oathnet.org/guides/webhooks) |
+| Public-account modules | `OSINT.EnrichIdentity`, `EnrichIdentityPost` | [Enrichment](https://docs.oathnet.org/api-reference/enrichIdentity) |
+| Individual lookups | `OSINT.IPInfo`, `Steam`, `Xbox`, `DiscordUserinfo`, `DiscordUsernameHistory`, `RobloxUserinfo`, `Holehe`, `GHunt`, `ExtractSubdomain` | [Account lookups](https://docs.oathnet.org/guides/osint-lookups) |
+| Compatibility | `Search.Breach`, `Search.Stealer`, `Utility.DBNameAutocomplete`, `OSINT.MinecraftHistory` | [Legacy routes](https://docs.oathnet.org/guides/legacy) |
+
+`MinecraftHistory` is a disabled compatibility route and returns an empty history. `DiscordToRoblox` remains in the SDK for older callers but is not a supported lookup for new integrations.
+
+## Filters and sessions
+
+`Breach.Search`, `Stealer.Search`, and `Victims.Search` switch to POST when the options include `Filter` or `FilterID`. Their `SearchGet` methods explicitly use GET, including structured filters. Use `SearchPost` with a `V2SearchPostBody` to send an explicit JSON body. Array query parameters use repeated plain names, such as `fields=email&fields=dbname`.
+
+`AI.Create` turns a natural-language request into a structured filter; `AI.GetContext` retrieves its temporary context. Build and preserve reusable filters using the [structured filter guide](https://docs.oathnet.org/guides/structured-filters).
+
+`Search.InitSession` returns `Data.Session.ID`. Set `SearchID` on related searches to use that session. Sessions expire and have service allowances; they do not make every operation free or schedule repeated searches.
+
+
+## Jobs and downloads
+
+Check the creation response and save `Data.JobID`. `WaitForCompletion(jobID, pollInterval, timeout)` honors the server's suggested polling delay and applies the timeout to the complete wait, including HTTP requests. It returns a `JobError` for failed, canceled, or expired jobs. Only a completed job is ready to download.
+
+`Exports.DownloadBytes` and `Bulk.DownloadBytes` return bytes. `Download` writes a file. `DownloadResponse` retains response headers. For victim files, use `Victims.GetFileResponse` and check `Header.Get("Content-Type")`: account-limited access can return a JSON preview with HTTP 200. Do not save a preview as an original file. See [jobs](https://docs.oathnet.org/guides/jobs) for expiry and job-specific access rules.
+
+## Errors and cancellation
+
+Check both the returned error and the endpoint's result fields. HTTP 200 may contain partial lookup outcomes, a failed notification test, or redacted results.
+
+HTTP errors use `AuthenticationError`, `ValidationError`, `NotFoundError`, `RateLimitError`, or `OathNetError`. These retain `StatusCode`, `Code`, `Details`, `Response`, and `RetryAfter` when supplied by the server. Error classification does not replace checking the server's policy or quota message. The SDK does not automatically retry requests.
+
+`WithTimeout` sets a timeout for each HTTP request. `client.WithContext(ctx)` binds a separate client to a caller's cancellation or deadline. `WithHTTPClient` accepts a custom transport. Cross-origin redirects do not receive the API key.
+
+## Runnable examples
+
+Clone the repository, set `OATHNET_API_KEY`, and run an example from its root:
 
 ```bash
-# Global options
-oathnet --api-key KEY --format json|table|raw COMMAND
-
-# Search commands
-oathnet search breach -q "query" [--cursor CURSOR] [--dbnames name]
-oathnet search stealer -q "query"
-oathnet search init -q "query"
-
-# Stealer V2
-oathnet stealer search -q "query" [--domain] [--wildcard] [--has-log-id]
-oathnet stealer subdomain -d "domain.com"
-
-# Victims V2
-oathnet victims search -q "query" [--email] [--ip]
-oathnet victims manifest LOG_ID
-oathnet victims file LOG_ID FILE_ID
-oathnet victims archive LOG_ID
-
-# File Search
-oathnet file-search create -e "expression" [--mode literal|regex|wildcard]
-oathnet file-search status JOB_ID
-oathnet file-search search -e "expression" [--timeout 60s]
-
-# Exports
-oathnet export create --type docs --format csv [--limit 1000]
-oathnet export status JOB_ID
-oathnet export download JOB_ID -o output.csv
-
-# OSINT
-oathnet osint ip IP_ADDRESS
-oathnet osint steam STEAM_ID
-oathnet osint xbox GAMERTAG
-oathnet osint discord user DISCORD_ID
-oathnet osint discord history DISCORD_ID
-oathnet osint discord roblox DISCORD_ID
-oathnet osint roblox [--user-id ID | --username NAME]
-oathnet osint holehe EMAIL
-oathnet osint ghunt EMAIL
-oathnet osint subdomain DOMAIN
-oathnet osint minecraft USERNAME
-
-# Utility
-oathnet util dbnames -q "linked"
+go run ./examples/basic_usage
 ```
 
-## Configuration
+`OATHNET_QUERY` overrides the synthetic `user@example.com` query. `OATHNET_BASE_URL` optionally selects a development API, including its `/api` prefix. The default origin is `https://oathnet.org/api`.
 
-API key can be set via:
+| Example | What it demonstrates |
+| --- | --- |
+| `basic_usage` | One V2 search and lossless source values |
+| `breach_search` | A structured email filter |
+| `pagination` | At most three pages with a workflow deadline |
+| `stealer_search` | Credentials connected to Victims |
+| `victims_search` | Summary and file manifest; requires `OATHNET_LOG_ID` |
+| `file_search` | A content-search job; requires `OATHNET_LOG_ID` |
+| `exports` | A bounded export saved to `export.jsonl` |
+| `osint_lookups` | One enrichment module; requires `OATHNET_USERNAME` |
+| `error_handling` | Status and retry metadata without automatic retries |
 
-1. CLI flag: `--api-key KEY`
-2. Environment variable: `OATHNET_API_KEY`
-
-## Examples
-
-The `examples/` directory contains comprehensive examples:
-
-| Example | Description |
-|---------|-------------|
-| `basic_usage/` | Client initialization and simple search |
-| `breach_search/` | Breach search with filters and pagination |
-| `stealer_search/` | V2 stealer search with log ID access |
-| `victims_search/` | Victim profiles, manifests, and file access |
-| `file_search/` | Async file search within victim logs |
-| `osint_lookups/` | All OSINT methods demonstrated |
-| `exports/` | Async export to CSV/JSONL |
-| `error_handling/` | Error type handling and retry logic |
-| `pagination/` | Cursor-based pagination patterns |
-
-Run an example:
+## Go command-line client
 
 ```bash
-export OATHNET_API_KEY="your-api-key"
-cd examples/basic_usage
-go run main.go
-```
-
-## Development
-
-```bash
-# Run all tests (requires API key)
-export OATHNET_API_KEY="your-api-key"
-go test ./pkg/oathnet/... -v
-
-# Run specific test file
-go test ./pkg/oathnet/... -v -run TestSearchService
-
-# Run tests with coverage
-go test ./pkg/oathnet/... -v -cover -coverprofile=coverage.out
-go tool cover -html=coverage.out
-
-# Build CLI
 go build -o oathnet ./cmd/oathnet
+./oathnet --help
+./oathnet stealer search --help
 ```
 
-### Test Structure
+The Go CLI supports a subset of SDK methods. Use its command help for current flags; use the SDK for investigations, monitor destinations, enrichment modules, and other operations absent from the CLI. The [main CLI documentation](https://docs.oathnet.org/sdks/cli) describes the separately maintained Python CLI.
 
-```
-pkg/oathnet/
-  testing_helper_test.go  # Test utilities and constants
-  client_test.go          # Client initialization tests
-  errors_test.go          # Error type tests
-  search_test.go          # Search service tests
-  osint_test.go           # OSINT service tests
-  stealer_test.go         # V2 stealer tests
-  victims_test.go         # V2 victims tests
-  filesearch_test.go      # File search tests
-  exports_test.go         # Export tests
-  utility_test.go         # Utility tests
-  ai_test.go              # AI filter tests
+## Development and tests
+
+```bash
+go test ./...
+go test -race ./pkg/oathnet
+go vet ./...
+go build ./...
+python3 scripts/check_openapi_parity.py --openapi ../../docs-site/openapi.yaml
 ```
 
-## License
+The parity script requires PyYAML and a local copy of the public OpenAPI document. The shown path is for the monorepo; use `--openapi` to select another copy. It captures actual SDK requests without opening a socket and checks every OpenAPI operation and option. It proves serialization; the separate `scripts/runtime-probe` program verifies responses against an explicitly approved disposable API.
 
-MIT License - See LICENSE file for details.
+Normal tests use local HTTP fixtures and require no API key. The existing integration tests run only with `OATHNET_LIVE_TESTS=1`, `OATHNET_API_KEY`, and an explicit loopback `OATHNET_BASE_URL` that includes a port. Before opting in, prove that the API's database, caches, and downstream services are disposable. Those tests create jobs and consume development quota; a loopback URL alone does not prove isolation.
 
-## Support
-
-- Documentation: https://docs.oathnet.org
-- Discord: https://discord.gg/DCjnk9TAMK
-- Email: info@oathnet.org
+See [documentation](https://docs.oathnet.org), [SDK source](https://github.com/oathnet/oathnet-go), and [support](https://docs.oathnet.org/resources/support).

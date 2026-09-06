@@ -56,7 +56,7 @@ func TestStealerV2Service_InvestigationSearchRequestConstruction(t *testing.T) {
 		IncludeCookieEvidence: true,
 		ExcludeCookieEvidence: true,
 		ExtraQuery: map[string][]string{
-			"custom[]": {"value/with space"},
+			"custom": {"value/with space"},
 		},
 	})
 	if err != nil {
@@ -89,7 +89,7 @@ func TestStealerV2Service_InvestigationSearchRequestConstruction(t *testing.T) {
 		"view":                    {"enriched"},
 		"include_cookie_evidence": {"true"},
 		"exclude_cookie_evidence": {"true"},
-		"custom[]":                {"value/with space"},
+		"custom":                  {"value/with space"},
 	}
 	if !reflect.DeepEqual(gotQuery, wantQuery) {
 		t.Fatalf("query = %#v, want %#v", gotQuery, wantQuery)
@@ -100,7 +100,7 @@ func TestStealerV2Service_InvestigationSearchRequestConstruction(t *testing.T) {
 		"include=credentials",
 		"include=evidence",
 		"filter=%7B%22field%22%3A%22domain%22",
-		"custom%5B%5D=value%2Fwith+space",
+		"custom=value%2Fwith+space",
 	} {
 		if !strings.Contains(gotRawQuery, encoded) {
 			t.Fatalf("raw query %q does not contain %q", gotRawQuery, encoded)
