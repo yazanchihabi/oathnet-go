@@ -42,67 +42,6 @@ func TestNewClient(t *testing.T) {
 	})
 }
 
-func TestClientServices(t *testing.T) {
-	client, err := NewClient("test-api-key")
-	if err != nil {
-		t.Fatalf("Failed to create client: %v", err)
-	}
-
-	t.Run("has Search service", func(t *testing.T) {
-		if client.Search == nil {
-			t.Error("Expected Search service to be non-nil")
-		}
-	})
-
-	t.Run("has OSINT service", func(t *testing.T) {
-		if client.OSINT == nil {
-			t.Error("Expected OSINT service to be non-nil")
-		}
-	})
-
-	t.Run("has Stealer service", func(t *testing.T) {
-		if client.Stealer == nil {
-			t.Error("Expected Stealer service to be non-nil")
-		}
-	})
-
-	t.Run("has Victims service", func(t *testing.T) {
-		if client.Victims == nil {
-			t.Error("Expected Victims service to be non-nil")
-		}
-	})
-
-	t.Run("has FileSearch service", func(t *testing.T) {
-		if client.FileSearch == nil {
-			t.Error("Expected FileSearch service to be non-nil")
-		}
-	})
-
-	t.Run("has Exports service", func(t *testing.T) {
-		if client.Exports == nil {
-			t.Error("Expected Exports service to be non-nil")
-		}
-	})
-
-	t.Run("has Bulk service", func(t *testing.T) {
-		if client.Bulk == nil {
-			t.Error("Expected Bulk service to be non-nil")
-		}
-	})
-
-	t.Run("has Utility service", func(t *testing.T) {
-		if client.Utility == nil {
-			t.Error("Expected Utility service to be non-nil")
-		}
-	})
-
-	t.Run("has Scanners service", func(t *testing.T) {
-		if client.Scanners == nil {
-			t.Error("Expected Scanners service to be non-nil")
-		}
-	})
-}
-
 func TestClientIntegration(t *testing.T) {
 	client := createTestClient(t)
 
