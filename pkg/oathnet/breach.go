@@ -21,6 +21,7 @@ type V2SearchPostBody map[string]interface{}
 
 // BreachV2SearchOptions contains query options for V2 breach search.
 type BreachV2SearchOptions struct {
+	Page       int
 	Cursor     string
 	PageSize   int
 	Sort       string
@@ -204,6 +205,7 @@ func buildBreachV2SearchParams(query string, opts *BreachV2SearchOptions, includ
 	}
 
 	addStringParam(params, "cursor", opts.Cursor)
+	addIntParam(params, "page", opts.Page)
 	addIntParam(params, "page_size", opts.PageSize)
 	addStringParam(params, "sort", opts.Sort)
 	addStringParam(params, "from", opts.From)

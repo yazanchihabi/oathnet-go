@@ -33,6 +33,7 @@ func main() {
     ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
     defer cancel()
     response, err := client.WithContext(ctx).Breach.Search("user@example.com", &oathnet.BreachV2SearchOptions{
+        Page: 4,
         PageSize: 25,
         Fields: []string{"email", "dbname"},
     })
@@ -48,7 +49,11 @@ func main() {
 
 `Raw` preserves the source document's JSON values, including arrays, objects, nulls, numbers, and custom fields. Existing scalar convenience fields such as `Email` are populated when that source value is a string. Use `Raw` for integrations that need every source shape.
 
-For another page, copy `response.Data.NextCursor` into the same options' `Cursor`. Keep the query, filters, selected fields, page size, and sort unchanged. Stop when the returned cursor is empty. A total with `Meta.TotalRelation == "gte"` is a lower bound. See [pagination](https://docs.oathnet.org/guides/pagination).
+Set `Page` and `PageSize` on breach, stealer, victim, or investigation search options. Read `response.Data.Meta.Page`, `TotalPages`, `TotalResults`, and `ResultLimit`. Legacy response data exposes the page metadata as `Pagination`, preserving its existing account `Meta` field.
+
+Pages start at 1. The default page size is 25; the backend caps it at 500. Your plan limits the total accessible results, with no separate plan page-count or page-size limit. `total_pages` describes that accessible window; it is 0 for an empty or incomplete response. Interactive search has a technical window of at most 10,000 results.
+
+Existing cursor calls remain supported. Send the returned cursor unchanged with the original search options, and omit `page`. Do not combine a page number with a cursor. Keep the query and sort stable; the index can change between requests. A total with `Meta.TotalRelation == "gte"` is a lower bound. See [pagination](https://docs.oathnet.org/guides/pagination).
 
 ## Select a workflow
 

@@ -9,6 +9,8 @@ type SearchService struct {
 
 // SearchOptions contains options for breach/stealer search.
 type SearchOptions struct {
+	Page     int
+	PageSize int
 	Cursor   string
 	DBNames  string
 	SearchID string
@@ -39,6 +41,8 @@ func (s *SearchService) Breach(query string, opts *SearchOptions) (*BreachSearch
 	params.Set("q", query)
 
 	if opts != nil {
+		addIntParam(params, "page", opts.Page)
+		addIntParam(params, "page_size", opts.PageSize)
 		if opts.Cursor != "" {
 			params.Set("cursor", opts.Cursor)
 		}
@@ -61,6 +65,8 @@ func (s *SearchService) Stealer(query string, opts *SearchOptions) (*StealerSear
 	params.Set("q", query)
 
 	if opts != nil {
+		addIntParam(params, "page", opts.Page)
+		addIntParam(params, "page_size", opts.PageSize)
 		if opts.Cursor != "" {
 			params.Set("cursor", opts.Cursor)
 		}

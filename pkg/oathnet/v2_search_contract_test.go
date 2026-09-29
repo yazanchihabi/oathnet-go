@@ -2,6 +2,7 @@ package oathnet
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -944,5 +945,112 @@ func TestExportsService_ListRequestConstruction(t *testing.T) {
 	}
 	if resp.Results[0].Request == nil || resp.Results[0].Request.Service != "stealer" || resp.Results[0].Metadata["trace_id"] != "trace-1" {
 		t.Fatalf("unexpected export request metadata: %#v", resp.Results[0])
+	}
+}
+
+func TestNumberedPaginationTransportAndMetadata(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		params := r.URL.Query()
+		if r.Method == http.MethodPost {
+			var body map[string]interface{}
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Error(err)
+			}
+			if page, ok := body["page"].(float64); ok {
+				params.Set("page", fmt.Sprint(int(page)))
+			}
+			if size, ok := body["page_size"].(float64); ok {
+				params.Set("page_size", fmt.Sprint(int(size)))
+			}
+		}
+		if params.Get("cursor") == "legacy" {
+			if params.Has("page") {
+				t.Error("cursor call injected page")
+			}
+		} else if params.Get("page") != "4" || params.Get("page_size") != "25" {
+			t.Errorf("pagination parameters = %v, want page=4&page_size=25", params)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"success":true,"data":{"items":[],"results":[],"meta":{"page":4,"page_size":25,"total_results":100,"total_pages":4,"result_limit":100},"credentials":{"items":[],"meta":{"page":4,"page_size":25,"total_results":100,"total_pages":4,"result_limit":100}}}}`))
+	}))
+	defer server.Close()
+	client, err := NewClient("fixture", WithBaseURL(server.URL))
+	if err != nil {
+		t.Fatal(err)
+	}
+	cases := []struct {
+		name string
+		call func() (*V2SearchMeta, error)
+	}{
+		{"breach", func() (*V2SearchMeta, error) {
+			r, e := client.Breach.Search("example.test", &BreachV2SearchOptions{Page: 4, PageSize: 25})
+			if e != nil {
+				return nil, e
+			}
+			return r.Data.Meta, e
+		}},
+		{"stealer", func() (*V2SearchMeta, error) {
+			r, e := client.Stealer.Search("example.test", &StealerSearchOptions{Page: 4, PageSize: 25})
+			if e != nil {
+				return nil, e
+			}
+			return r.Data.Meta, e
+		}},
+		{"victims", func() (*V2SearchMeta, error) {
+			r, e := client.Victims.Search("example.test", &VictimsSearchOptions{Page: 4, PageSize: 25})
+			if e != nil {
+				return nil, e
+			}
+			return r.Data.Meta, e
+		}},
+		{"investigation", func() (*V2SearchMeta, error) {
+			r, e := client.Stealer.InvestigationSearch("example.test", &InvestigationSearchOptions{Include: []string{"credentials"}, Page: 4, PageSize: 25})
+			if e != nil {
+				return nil, e
+			}
+			return r.Data.Credentials.Meta, e
+		}},
+		{"investigation-post", func() (*V2SearchMeta, error) {
+			r, e := client.Stealer.InvestigationSearchPost(&V2InvestigationSearchRequest{Q: "example.test", Include: []string{"credentials"}, Page: 4, PageSize: 25})
+			if e != nil {
+				return nil, e
+			}
+			return r.Data.Credentials.Meta, e
+		}},
+		{"breach-post", func() (*V2SearchMeta, error) {
+			r, e := client.Breach.SearchPost(V2SearchPostBody{"q": "example.test", "page": 4, "page_size": 25}, nil)
+			if e != nil {
+				return nil, e
+			}
+			return r.Data.Meta, e
+		}},
+		{"legacy-breach", func() (*V2SearchMeta, error) {
+			r, e := client.Search.Breach("example.test", &SearchOptions{Page: 4, PageSize: 25})
+			if e != nil {
+				return nil, e
+			}
+			return r.Data.Pagination, e
+		}},
+		{"legacy-stealer", func() (*V2SearchMeta, error) {
+			r, e := client.Search.Stealer("example.test", &SearchOptions{Page: 4, PageSize: 25})
+			if e != nil {
+				return nil, e
+			}
+			return r.Data.Pagination, e
+		}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			meta, err := tc.call()
+			if err != nil {
+				t.Fatal(err)
+			}
+			if meta == nil || meta.Page != 4 || meta.PageSize != 25 || meta.TotalResults != 100 || meta.TotalPages != 4 || meta.ResultLimit != 100 {
+				t.Fatalf("pagination metadata lost: %+v", meta)
+			}
+		})
+	}
+	if _, err := client.Breach.Search("example.test", &BreachV2SearchOptions{Cursor: "legacy", PageSize: 25}); err != nil {
+		t.Fatal(err)
 	}
 }

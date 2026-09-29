@@ -20,6 +20,7 @@ type StealerV2Service struct {
 
 // StealerSearchOptions contains options for V2 stealer search.
 type StealerSearchOptions struct {
+	Page                   int
 	Cursor                 string
 	PageSize               int
 	Sort                   string
@@ -63,6 +64,7 @@ type StealerSearchOptions struct {
 
 // InvestigationSearchOptions contains query options for GET investigation search.
 type InvestigationSearchOptions struct {
+	Page                  int
 	Scope                 string
 	Include               []string
 	PageSize              int
@@ -97,6 +99,7 @@ type V2InvestigationCursors map[string]*string
 
 // V2InvestigationSearchRequest is the JSON body for POST investigation search.
 type V2InvestigationSearchRequest struct {
+	Page                  int                           `json:"page,omitempty"`
 	Q                     string                        `json:"q,omitempty"`
 	Scope                 string                        `json:"scope,omitempty"`
 	Include               []string                      `json:"include,omitempty"`
@@ -280,6 +283,7 @@ func investigationBodyFromOptions(query string, opts *InvestigationSearchOptions
 	body.Include = opts.Include
 	body.FilterMode = opts.FilterMode
 	body.Compact = opts.Compact
+	body.Page = opts.Page
 	body.PageSize = opts.PageSize
 	body.View = opts.View
 	body.SearchID = opts.SearchID
@@ -383,6 +387,7 @@ func buildInvestigationSearchParams(query string, opts *InvestigationSearchOptio
 
 	addStringParam(params, "scope", opts.Scope)
 	addRepeatedParam(params, "include", opts.Include)
+	addIntParam(params, "page", opts.Page)
 	addIntParam(params, "page_size", opts.PageSize)
 	addStringParam(params, "search_id", opts.SearchID)
 	if err := addFilterParam(params, opts.Filter); err != nil {
@@ -435,6 +440,7 @@ func buildStealerV2SearchParams(query string, opts *StealerSearchOptions, includ
 	}
 
 	addStringParam(params, "cursor", opts.Cursor)
+	addIntParam(params, "page", opts.Page)
 	addIntParam(params, "page_size", opts.PageSize)
 	addStringParam(params, "sort", opts.Sort)
 	addStringParam(params, "from", opts.From)

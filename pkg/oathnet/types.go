@@ -165,6 +165,7 @@ type BreachSearchResponse struct {
 }
 
 type BreachSearchData struct {
+	Pagination     *V2SearchMeta  `json:"meta,omitempty"`
 	Results        []BreachResult `json:"results"`
 	ResultsFound   int            `json:"results_found"`
 	ResultsShown   int            `json:"results_shown"`
@@ -267,6 +268,7 @@ type StealerSearchResponse struct {
 }
 
 type StealerSearchData struct {
+	Pagination     *V2SearchMeta   `json:"meta,omitempty"`
 	Results        []StealerResult `json:"results"`
 	ResultsFound   int             `json:"results_found"`
 	ResultsShown   int             `json:"results_shown"`
@@ -370,6 +372,10 @@ type V2StealerResponse struct {
 }
 
 type V2SearchMeta struct {
+	Page          int     `json:"page,omitempty"`
+	PageSize      int     `json:"page_size,omitempty"`
+	TotalResults  int     `json:"total_results,omitempty"`
+	ResultLimit   int     `json:"result_limit,omitempty"`
 	Total         int     `json:"total,omitempty"`
 	Count         int     `json:"count,omitempty"`
 	TookMs        int     `json:"took_ms,omitempty"`

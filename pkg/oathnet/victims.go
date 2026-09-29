@@ -25,6 +25,7 @@ type VictimsService struct {
 
 // VictimsSearchOptions contains options for victims search.
 type VictimsSearchOptions struct {
+	Page            int
 	Cursor          string
 	PageSize        int
 	Sort            string
@@ -456,6 +457,7 @@ func buildVictimsV2SearchParams(query string, opts *VictimsSearchOptions, includ
 	}
 
 	addStringParam(params, "cursor", opts.Cursor)
+	addIntParam(params, "page", opts.Page)
 	addIntParam(params, "page_size", opts.PageSize)
 	addStringParam(params, "sort", opts.Sort)
 	addStringParam(params, "from", opts.From)

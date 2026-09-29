@@ -187,12 +187,18 @@ var searchBreachCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		query, _ := cmd.Flags().GetString("query")
 		cursor, _ := cmd.Flags().GetString("cursor")
+		page, pageSize, err := paginationFlags(cmd)
+		if err != nil {
+			return err
+		}
 		dbnames, _ := cmd.Flags().GetString("dbnames")
 		outputFile, _ := cmd.Flags().GetString("output")
 
 		result, err := client.Search.Breach(query, &oathnet.SearchOptions{
-			Cursor:  cursor,
-			DBNames: dbnames,
+			Cursor:   cursor,
+			Page:     page,
+			PageSize: pageSize,
+			DBNames:  dbnames,
 		})
 		if err != nil {
 			return err
@@ -238,8 +244,12 @@ var searchStealerCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		query, _ := cmd.Flags().GetString("query")
 		cursor, _ := cmd.Flags().GetString("cursor")
+		page, pageSize, err := paginationFlags(cmd)
+		if err != nil {
+			return err
+		}
 
-		result, err := client.Search.Stealer(query, &oathnet.SearchOptions{Cursor: cursor})
+		result, err := client.Search.Stealer(query, &oathnet.SearchOptions{Cursor: cursor, Page: page, PageSize: pageSize})
 		if err != nil {
 			return err
 		}
@@ -293,13 +303,17 @@ var searchInitCmd = &cobra.Command{
 
 func init() {
 	searchBreachCmd.Flags().StringP("query", "q", "", "Search query (required)")
-	searchBreachCmd.Flags().String("cursor", "", "Pagination cursor")
+	searchBreachCmd.Flags().String("cursor", "", "Legacy pagination cursor; omit --page")
+	searchBreachCmd.Flags().Int("page", 0, "Page number, starting at 1")
+	searchBreachCmd.Flags().Int("page-size", 25, "Results per page (maximum 500)")
 	searchBreachCmd.Flags().String("dbnames", "", "Filter by database names")
 	searchBreachCmd.Flags().StringP("output", "o", "", "Save results to file")
 	searchBreachCmd.MarkFlagRequired("query")
 
 	searchStealerCmd.Flags().StringP("query", "q", "", "Search query (required)")
-	searchStealerCmd.Flags().String("cursor", "", "Pagination cursor")
+	searchStealerCmd.Flags().String("cursor", "", "Legacy pagination cursor; omit --page")
+	searchStealerCmd.Flags().Int("page", 0, "Page number, starting at 1")
+	searchStealerCmd.Flags().Int("page-size", 25, "Results per page (maximum 500)")
 	searchStealerCmd.MarkFlagRequired("query")
 
 	searchInitCmd.Flags().StringP("query", "q", "", "Search query (required)")
@@ -566,7 +580,10 @@ var stealerSearchCmd = &cobra.Command{
 		domain, _ := cmd.Flags().GetString("domain")
 		wildcard, _ := cmd.Flags().GetBool("wildcard")
 		hasLogID, _ := cmd.Flags().GetBool("has-log-id")
-		pageSize, _ := cmd.Flags().GetInt("page-size")
+		page, pageSize, err := paginationFlags(cmd)
+		if err != nil {
+			return err
+		}
 		fileSearch, _ := cmd.Flags().GetString("file-search")
 		fileSearchMode, _ := cmd.Flags().GetString("file-search-mode")
 		outputFile, _ := cmd.Flags().GetString("output")
@@ -575,6 +592,7 @@ var stealerSearchCmd = &cobra.Command{
 			Domain:   domain,
 			Wildcard: wildcard,
 			HasLogID: hasLogID,
+			Page:     page,
 			PageSize: pageSize,
 		})
 		if err != nil {
@@ -696,7 +714,8 @@ func init() {
 	stealerSearchCmd.Flags().String("domain", "", "Filter by domain")
 	stealerSearchCmd.Flags().Bool("wildcard", false, "Enable wildcard search")
 	stealerSearchCmd.Flags().Bool("has-log-id", false, "Only results with log ID")
-	stealerSearchCmd.Flags().Int("page-size", 25, "Results per page")
+	stealerSearchCmd.Flags().Int("page", 0, "Page number, starting at 1")
+	stealerSearchCmd.Flags().Int("page-size", 25, "Results per page (maximum 500)")
 	stealerSearchCmd.Flags().String("file-search", "", "Auto file-search pattern in results")
 	stealerSearchCmd.Flags().String("file-search-mode", "literal", "Search mode (literal|regex|wildcard)")
 	stealerSearchCmd.Flags().StringP("output", "o", "", "Save results to file")
@@ -726,7 +745,10 @@ var victimsSearchCmd = &cobra.Command{
 		ip, _ := cmd.Flags().GetString("ip")
 		discordID, _ := cmd.Flags().GetString("discord-id")
 		wildcard, _ := cmd.Flags().GetBool("wildcard")
-		pageSize, _ := cmd.Flags().GetInt("page-size")
+		page, pageSize, err := paginationFlags(cmd)
+		if err != nil {
+			return err
+		}
 		fileSearch, _ := cmd.Flags().GetString("file-search")
 		fileSearchMode, _ := cmd.Flags().GetString("file-search-mode")
 		outputFile, _ := cmd.Flags().GetString("output")
@@ -736,6 +758,7 @@ var victimsSearchCmd = &cobra.Command{
 			IP:        ip,
 			DiscordID: discordID,
 			Wildcard:  wildcard,
+			Page:      page,
 			PageSize:  pageSize,
 		})
 		if err != nil {
@@ -897,7 +920,8 @@ func init() {
 	victimsSearchCmd.Flags().String("ip", "", "Filter by IP")
 	victimsSearchCmd.Flags().String("discord-id", "", "Filter by Discord ID")
 	victimsSearchCmd.Flags().Bool("wildcard", false, "Enable wildcard matching")
-	victimsSearchCmd.Flags().Int("page-size", 25, "Results per page")
+	victimsSearchCmd.Flags().Int("page", 0, "Page number, starting at 1")
+	victimsSearchCmd.Flags().Int("page-size", 25, "Results per page (maximum 500)")
 	victimsSearchCmd.Flags().String("file-search", "", "Auto file-search pattern in results")
 	victimsSearchCmd.Flags().String("file-search-mode", "literal", "Search mode (literal|regex|wildcard)")
 	victimsSearchCmd.Flags().StringP("output", "o", "", "Save results to file")
@@ -1231,4 +1255,20 @@ func min(a, b int) int {
 		return a
 	}
 	return b
+}
+
+// Zero omits page so existing cursor requests remain compatible.
+func paginationFlags(cmd *cobra.Command) (int, int, error) {
+	page, err := cmd.Flags().GetInt("page")
+	if err != nil {
+		return 0, 0, err
+	}
+	size, err := cmd.Flags().GetInt("page-size")
+	if err != nil {
+		return 0, 0, err
+	}
+	if (cmd.Flags().Changed("page") && page < 1) || size < 1 {
+		return 0, 0, fmt.Errorf("page and page-size must be positive integers")
+	}
+	return page, size, nil
 }

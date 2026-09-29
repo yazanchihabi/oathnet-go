@@ -17,6 +17,7 @@ func main() {
 	options := &oathnet.BreachV2SearchOptions{PageSize: 25, Fields: []string{"email", "dbname"}}
 	query := exampleclient.Query()
 	for page := 1; page <= 3; page++ {
+		options.Page = page
 		response, err := client.Breach.Search(query, options)
 		if err != nil {
 			log.Fatal(err)
@@ -25,13 +26,12 @@ func main() {
 			log.Fatal("search returned no successful data")
 		}
 		fmt.Printf("Page %d: %d records\n", page, len(response.Data.Items))
-		next := response.Data.NextCursor
-		if next == "" {
+		if response.Data.Meta == nil {
 			break
 		}
-		if next == options.Cursor {
-			log.Fatal("server returned the same cursor; stopping")
+		fmt.Printf("Accessible pages: %d; results: %d\n", response.Data.Meta.TotalPages, response.Data.Meta.TotalResults)
+		if !response.Data.Meta.HasMore {
+			break
 		}
-		options.Cursor = next
 	}
 }
