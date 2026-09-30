@@ -53,7 +53,7 @@ Set `Page` and `PageSize` on breach, stealer, victim, or investigation search op
 
 Pages start at 1. The default page size is 25; the backend caps it at 500. Your plan limits the total accessible results, with no separate plan page-count or page-size limit. `total_pages` describes that accessible window; it is 0 for an empty or incomplete response. There is no fixed total-result ceiling below your plan allowance. Deep page jumps can take longer because the backend traverses bounded Elasticsearch batches. Existing cursor tokens remain supported; changing page size during cursor pagination continues from the previous row position.
 
-Existing cursor calls remain supported. Send the returned cursor unchanged with the original search options, and omit `page`. Do not combine a page number with a cursor. Keep the query and sort stable; the index can change between requests. A total with `Meta.TotalRelation == "gte"` is a lower bound. See [pagination](https://docs.oathnet.org/guides/pagination).
+Existing cursor calls remain supported. Send the returned cursor unchanged with the original search options, and omit `page`. Do not combine a page number with a cursor. Keep the query, filters, sort and search session stable. Large authenticated searches reuse a snapshot for up to five idle minutes or thirty minutes total. HTTP 410 `cursor_expired` means restart with page 1 and no cursor. Smaller searches can reflect index changes between requests. A total with `Meta.TotalRelation == "gte"` is a lower bound. See [pagination](https://docs.oathnet.org/guides/pagination).
 
 ## Select a workflow
 
