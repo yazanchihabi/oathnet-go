@@ -157,15 +157,17 @@ type ScannerRunsOptions struct {
 
 // ScannerCreateRequest contains scanner creation fields.
 type ScannerCreateRequest struct {
-	Name                string             `json:"name"`
-	ScannerType         string             `json:"scanner_type,omitempty"`
-	QueryConfig         ScannerQueryConfig `json:"query_config,omitempty"`
-	NotificationType    string             `json:"notification_type,omitempty"`
-	DestinationUID      string             `json:"destination_uid,omitempty"`
-	WebhookURL          string             `json:"webhook_url,omitempty"`
-	WebhookSecret       string             `json:"webhook_secret,omitempty"`
-	WebhookSecurityMode string             `json:"webhook_security_mode,omitempty"`
-	NotifyOnZeroResults *bool              `json:"notify_on_zero_results,omitempty"`
+	Name             string             `json:"name"`
+	ScannerType      string             `json:"scanner_type,omitempty"`
+	QueryConfig      ScannerQueryConfig `json:"query_config,omitempty"`
+	NotificationType string             `json:"notification_type,omitempty"`
+	DestinationUID   string             `json:"destination_uid,omitempty"`
+	// UseAccountEmail sends destination_uid:null, overriding DestinationUID.
+	UseAccountEmail     bool   `json:"-"`
+	WebhookURL          string `json:"webhook_url,omitempty"`
+	WebhookSecret       string `json:"webhook_secret,omitempty"`
+	WebhookSecurityMode string `json:"webhook_security_mode,omitempty"`
+	NotifyOnZeroResults *bool  `json:"notify_on_zero_results,omitempty"`
 }
 
 func (r ScannerCreateRequest) MarshalJSON() ([]byte, error) {
@@ -174,13 +176,18 @@ func (r ScannerCreateRequest) MarshalJSON() ([]byte, error) {
 	if r.QueryConfig != nil {
 		fields["query_config"] = r.QueryConfig
 	}
+	if r.UseAccountEmail {
+		fields["destination_uid"] = nil
+	}
 	return marshalRequestFields(alias(r), fields)
 }
 
 // ScannerUpdateRequest contains partial scanner update fields.
 // It intentionally has no status field; use Pause or Resume for state changes.
 type ScannerUpdateRequest struct {
-	DestinationUID      string             `json:"destination_uid,omitempty"`
+	DestinationUID string `json:"destination_uid,omitempty"`
+	// UseAccountEmail sends destination_uid:null. The zero value preserves the saved destination.
+	UseAccountEmail     bool               `json:"-"`
 	Name                string             `json:"name,omitempty"`
 	ScannerType         string             `json:"scanner_type,omitempty"`
 	QueryConfig         ScannerQueryConfig `json:"query_config,omitempty"`
@@ -197,19 +204,34 @@ func (r ScannerUpdateRequest) MarshalJSON() ([]byte, error) {
 	if r.QueryConfig != nil {
 		fields["query_config"] = r.QueryConfig
 	}
+	if r.UseAccountEmail {
+		fields["destination_uid"] = nil
+	}
 	return marshalRequestFields(alias(r), fields)
 }
 
 // ScannerDraftTestRequest contains delivery-test fields for an unsaved scanner.
 type ScannerDraftTestRequest struct {
-	Name                string             `json:"name,omitempty"`
-	ScannerType         string             `json:"scanner_type"`
-	QueryConfig         ScannerQueryConfig `json:"query_config"`
-	NotificationType    string             `json:"notification_type"`
-	WebhookURL          string             `json:"webhook_url,omitempty"`
-	WebhookSecret       string             `json:"webhook_secret,omitempty"`
-	WebhookSecurityMode string             `json:"webhook_security_mode,omitempty"`
-	NotifyOnZeroResults *bool              `json:"notify_on_zero_results,omitempty"`
+	Name             string             `json:"name,omitempty"`
+	ScannerType      string             `json:"scanner_type"`
+	QueryConfig      ScannerQueryConfig `json:"query_config"`
+	NotificationType string             `json:"notification_type,omitempty"`
+	DestinationUID   string             `json:"destination_uid,omitempty"`
+	// UseAccountEmail sends destination_uid:null, overriding DestinationUID.
+	UseAccountEmail     bool   `json:"-"`
+	WebhookURL          string `json:"webhook_url,omitempty"`
+	WebhookSecret       string `json:"webhook_secret,omitempty"`
+	WebhookSecurityMode string `json:"webhook_security_mode,omitempty"`
+	NotifyOnZeroResults *bool  `json:"notify_on_zero_results,omitempty"`
+}
+
+func (r ScannerDraftTestRequest) MarshalJSON() ([]byte, error) {
+	type alias ScannerDraftTestRequest
+	fields := map[string]interface{}{}
+	if r.UseAccountEmail {
+		fields["destination_uid"] = nil
+	}
+	return marshalRequestFields(alias(r), fields)
 }
 
 // ScannerQuotaResponse is the raw scanner quota payload.

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"testing"
 )
 
@@ -71,5 +72,73 @@ func TestScannerDestinationLifecycleRequests(t *testing.T) {
 	}
 	if len(seen) != 5 {
 		t.Fatalf("expected 5 distinct operations, got %v", seen)
+	}
+}
+
+func TestSavedEmailDestinationRequests(t *testing.T) {
+	destination := `{"uid":"saved-email","name":"Security email","notification_type":"email","recipient_email":"security@example.com","target_hint":"s***@example.com","webhook_security_mode":null,"verified":true}`
+	bodies := []map[string]interface{}{}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.Method == http.MethodGet {
+			_, _ = w.Write([]byte("[" + destination + "]"))
+			return
+		}
+		var body map[string]interface{}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Error(err)
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		bodies = append(bodies, body)
+		if r.URL.Path == "/scanners/destinations" {
+			_, _ = w.Write([]byte(destination))
+		} else {
+			_, _ = w.Write([]byte(`{"success":true}`))
+		}
+	}))
+	defer server.Close()
+	client, err := NewClient("test-key", WithBaseURL(server.URL))
+	if err != nil {
+		t.Fatal(err)
+	}
+	created, err := client.Scanners.CreateDestination(ScannerDestinationCreateRequest{
+		Name: "Security email", NotificationType: "email", RecipientEmail: "security@example.com",
+	})
+	if err != nil || created.RecipientEmail != "security@example.com" || created.WebhookSecurityMode != "" {
+		t.Fatalf("email create failed: %#v %v", created, err)
+	}
+	listed, err := client.Scanners.ListDestinations()
+	if err != nil || len(listed) != 1 || listed[0].RecipientEmail != "security@example.com" {
+		t.Fatalf("email list failed: %#v %v", listed, err)
+	}
+	if _, err := client.Scanners.Create(ScannerCreateRequest{Name: "Monitor", UseAccountEmail: true}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := client.Scanners.Update("monitor", ScannerUpdateRequest{Name: "Renamed"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := client.Scanners.Update("monitor", ScannerUpdateRequest{UseAccountEmail: true}); err != nil {
+		t.Fatal(err)
+	}
+	query := ScannerQueryConfig{"q": "example.com"}
+	for _, request := range []ScannerDraftTestRequest{
+		{ScannerType: "breach", QueryConfig: query, DestinationUID: "saved-email"},
+		{ScannerType: "breach", QueryConfig: query, UseAccountEmail: true},
+	} {
+		if _, err := client.Scanners.TestDraftDelivery(request); err != nil {
+			t.Fatal(err)
+		}
+	}
+	want := []map[string]interface{}{
+		{"name": "Security email", "notification_type": "email", "recipient_email": "security@example.com"},
+		{"name": "Monitor", "destination_uid": nil},
+		{"name": "Renamed"},
+		{"destination_uid": nil},
+		{"scanner_type": "breach", "query_config": map[string]interface{}{"q": "example.com"}, "destination_uid": "saved-email"},
+		{"scanner_type": "breach", "query_config": map[string]interface{}{"q": "example.com"}, "destination_uid": nil},
+	}
+	if !reflect.DeepEqual(bodies, want) {
+		t.Fatalf("unexpected request bodies: got %#v, want %#v", bodies, want)
 	}
 }
